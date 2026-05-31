@@ -4,19 +4,25 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: lidia
-      POSTGRES_PASSWORD: lidia_secret
-      POSTGRES_DB: lidia
+      POSTGRES_USER: ${POSTGRES_USER:-lidia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lidia_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-lidia}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./migrations/001_lidia_schema.sql:/docker-entrypoint-initdb.d/001_lidia_schema.sql
+      # Aplica todas as migrações na primeira inicialização do banco.
+      # Ordem alfabética importa — prefixos 001, 002, 003, 005 garantem.
+      - ./migrations/001_lidia_schema.sql:/docker-entrypoint-initdb.d/001_lidia_schema.sql:ro
+      - ./migrations/002_unique_eventos.sql:/docker-entrypoint-initdb.d/002_unique_eventos.sql:ro
+      - ./migrations/003_disparos.sql:/docker-entrypoint-initdb.d/003_disparos.sql:ro
+      - ./migrations/005_eventos_origem.sql:/docker-entrypoint-initdb.d/005_eventos_origem.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lidia"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lidia}"]
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -27,6 +33,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
 
   app:
     build: .
@@ -39,15 +46,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./app:/app/app
-      - ./scripts:/app/scripts
-      - ./migrations:/app/migrations
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   pgdata:
