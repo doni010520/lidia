@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.core.config import settings
@@ -101,6 +102,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         logger.info("Oracao responder agendado a cada 5min")
 
+    # ── Disparo scheduler (a cada 1min) ──
+    from app.workers.disparo_scheduler import check_scheduled_disparos
+    scheduler.add_job(
+        check_scheduled_disparos,
+        "interval",
+        minutes=1,
+        id="disparo_scheduler",
+        name="Disparos agendados → executar",
+        misfire_grace_time=60,
+    )
+    logger.info("Disparo scheduler agendado a cada 1min")
+
     scheduler.start()
     logger.info(f"APScheduler iniciado ({len(scheduler.get_jobs())} jobs)")
 
@@ -122,9 +135,16 @@ def create_app() -> FastAPI:
 
     from app.api.webhooks import router as webhook_router
     from app.api.health import router as health_router
+    from app.api.auth import router as auth_router
+    from app.api.disparos import router as disparos_router
 
     app.include_router(webhook_router)
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(disparos_router)
+
+    # Servir estáticos DEPOIS dos routers (API tem prioridade)
+    app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
 
     return app
 
