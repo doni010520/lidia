@@ -1,0 +1,7 @@
+=== NODE: PAES_informacoes ===
+=== TEXT INPUT (jinja n8n) ===
+
+
+=== SYSTEM MESSAGE (51 chars) ===
+= {{ $('join_messages2').item.json.text_message }}
+
