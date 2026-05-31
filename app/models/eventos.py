@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, Index, Integer, Text, Time, func
+from sqlalchemy import CheckConstraint, Date, DateTime, Index, Integer, String, Text, Time, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -25,6 +25,12 @@ class EventoPaes(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # ── Campo novo (migration 005) ──
+    origem: Mapped[str] = mapped_column(
+        String(20), default="painel", server_default="painel"
+    )
+
     __table_args__ = (
+        CheckConstraint("origem IN ('sheets', 'painel')", name="ck_eventos_origem"),
         Index("idx_eventos_data", "data_inicio", "data_final"),
     )

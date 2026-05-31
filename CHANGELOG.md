@@ -1,91 +1,48 @@
 # Changelog
 
-Histórico de entregas da migração da LidIA (n8n → Python/FastAPI).
+## [1.2.0] — Gestão de Eventos (Fase B)
 
-## [1.0.0] — Migração completa
+### Adicionado
+- `GET /api/eventos` — listagem com filtros `periodo` (futuros/passados/todos) e `origem` (painel/sheets/todos)
+- `POST /api/eventos` — criação com `origem=painel` e `sheets_row_id=painel:<uuid>`
+- `PATCH /api/eventos/{id}` — edição com proteção de conflito Sheets (409 + `confirmar_descolar`)
+- `DELETE /api/eventos/{id}` — exclusão com mesma proteção de conflito
+- `POST /api/eventos/upload-capa` — upload de imagem para Google Drive
+- Migration `005_eventos_origem.sql` — coluna `origem` em `eventos_paes`
+- Frontend: aba "Eventos" com form CRUD, tabela com filtros, chip de origem, upload de capa
+- `tests/test_eventos_api.py` — 6 testes cobrindo CRUD + conflito 409
 
-Sistema pronto para produção. **156 testes passando**, todas as 10 fases concluídas.
+### Modificado
+- `app/models/eventos.py` — campo `origem` adicionado com CHECK constraint
+- `app/main.py` — registro do router de eventos
+- `app/static/index.html` — aba Eventos adicionada ao painel
+- `README.md` — seção de Gestão de Eventos documentada
 
-### Fase 1 — Infraestrutura e Webhook
-- FastAPI app com lifespan + APScheduler
-- Cliente uazapi v2 completo (`uaz_client.py`)
-- Webhook handler com HMAC, dedup, filtro de grupos/revoke/from_me
-- Buffer Redis com debounce de 10s
-- Schema do banco (9 tabelas) + models SQLAlchemy
-- 14 testes unitários
+## [1.1.0] — Disparos em Massa (Fase A)
 
-### Fase 1-v2 — Correções
-- Nomes corretos de campos uazapi v2 (`id` em vez de `messageId`, `replyid` em vez de `replyId`)
-- Tratamento de envelope `body` no webhook
-- Cobertura de JID `@lid`
-- 16 testes adicionados
+### Adicionado
+- `POST /api/auth/login` — autenticação JWT
+- `GET /api/disparos` — listagem
+- `POST /api/disparos` — criação (imediato ou agendado)
+- `PATCH /api/disparos/{id}/cancelar` — cancelamento
+- `GET /api/disparos/{id}/log` — log de envio paginado
+- `POST /api/disparos/upload` — upload de arquivo para Drive
+- `GET /api/disparos/contatos-count` — preview de contatos elegíveis
+- Worker `disparo_runner` com toggle de chatbot, idempotência, anti-spam 3s
+- Worker `disparo_scheduler` (APScheduler 1min)
+- Frontend: painel com login, upload drag/drop, histórico com progresso
+- Migration `003_disparos.sql` — tabelas disparos, disparo_log, usuarios_painel
+- Anonimização LGPD em `excluir_usuario` (disparo_log)
+- 27 testes
 
-### Fase 2 — Agente principal sem tools
-- Pipeline de conversação completo (14 etapas)
-- RAG service (pgvector + retrieve_hint)
-- OpenAI service com tool-calling loop
-- Agentes LidIA e LidIA_cadastro com renderização de system prompt via `str.replace`
-- Script `index_knowledge.py` para PDF/DOCX/XLSX/PPTX
-- 52 testes
+## [1.0.0] — LidIA Core
 
-### Fase 3 — Tools de CRM
-- Registry + dispatcher de tools
-- Tools: `buscar_documentos`, `cadastrar_contato`, `cadastrar_aniversario`, `atualizar_sobrenome`, `excluir_usuario`
-- Commit imediato para contatos novos + atualização de nome quando vazio
-- `json.dumps` para metadata
-- 87 testes
-
-### Fase 4 — Tools de conteúdo + Sheets sync
-- Tools: `buscar_evento`, `plano_de_leitura`, `novos_convertidos`
-- Cliente Google Sheets + 3 workers de sync (eventos, plano, informações)
-- Integração APScheduler
-- 104 testes
-
-### Fase 5 — Mídia e arquivos
-- `media_processor` com decrypt via uazapi (áudio + imagem + PDF/DOCX/XLSX/PPTX + vídeo)
-- Cliente Google Drive (search/upload/share/public_url)
-- Tools: `PAES_listar_arquivos`, `PAES_download_arquivos`, `encaminhar_video_louvor`
-- Migration 002 com UNIQUE constraint para `sheets_row_id`
-- 125 testes
-
-### Fase 6 — Notificações e oração
-- Cliente Gmail
-- Tool `notificar_time_interno` com fallback "Dúvidas Gerais"
-- Tool `resposta_oracao` com cascade para notificar Pastoral
-- Worker `oracao_responder` a cada 5min
-- Seed das 17 equipes
-
-### Fase 7 — Roteamento admin
-- `admin_router` com 5 prefixos (TreinoIA12 / AgendaIA12 / ArquivosIA12 / Resposta_oracaoIA12 / Limpar dados)
-- Tools admin: `eventos_Lidia`, `informacoes_Lidia`, `treinamento_LidIA`
-- Integração no `conversation_service` (passo 2.5 do pipeline)
-
-### Fase 8 — Handoff e analytics
-- `handoff_service` com regex "Roberta aqui!" / "té mais!"
-- Pausa nativa uazapi configurada no lifespan
-- `analytics_service` com tokens, custo, intent, sentimento
-- 144 testes
-
-### Fase 9 — Migração Supabase
-- Script `migrate_from_supabase.py` com `--dry-run` e `--include-history`
-- 4 migrate functions: contacts, novos_convertidos, eventos, plano_leitura
-- UPSERT idempotente com COALESCE
-
-### Fase 10 — README e documentação
-- README com arquitetura, stack, setup, deploy
-- 156 testes finais
-- Pronto para go-live
-
----
-
-## Stack final
-
-- **API:** FastAPI + Uvicorn
-- **LLM:** OpenAI gpt-4.1-mini (tool-calling)
-- **RAG:** pgvector (1536d, text-embedding-3-small)
-- **DB:** PostgreSQL 16 + pgvector
-- **Cache:** Redis 7 (debounce + dedup)
-- **WhatsApp:** uazapi v2
-- **Google:** Sheets API + Drive API + Gmail API
-- **Workers:** APScheduler (sheets sync 15min, oração 5min)
-- **Auth:** bcrypt + JWT (planejado para módulo Disparos)
+### Adicionado
+- Pipeline conversacional: webhook → buffer Redis → RAG → OpenAI → WhatsApp
+- 16 tools de function-calling (13 atendimento + 3 admin)
+- Media processor: áudio (Whisper), imagem (GPT Vision), PDF/DOCX/XLSX/PPTX, vídeo (Drive)
+- Handoff dual: pausa automática 30min + toggle persistente por keyword
+- Analytics: tokens, custo, intent, sentimento
+- Workers: sheets_sync (15min), oração (5min)
+- Admin router: prefixos TreinoIA12, AgendaIA12, Limpar dados
+- 156 testes
