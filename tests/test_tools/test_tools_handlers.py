@@ -294,10 +294,16 @@ class TestExcluirUsuario:
 
         delete_contact_result = MagicMock()
 
+        # Após delete_contact_result vem o UPDATE de anonimização em disparo_log
+        # (módulo de disparos — preserva trilha de auditoria sem PII)
+        anonimizar_disparo_log_result = MagicMock()
+        anonimizar_disparo_log_result.rowcount = 0
+
         mock_db.execute.side_effect = [
             select_result,
             delete_msgs_result,
             delete_contact_result,
+            anonimizar_disparo_log_result,
         ]
 
         result = await execute({"telefone": "5581999999999"}, "5581999999999", mock_db)

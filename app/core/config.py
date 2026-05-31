@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     training_schedule_cron: str = "0 3 * * *"
     sheets_sync_interval_minutes: int = 15
 
+    # Disparos
+    disparos_delay_seconds: int = 3
+    disparos_business_hours_enabled: bool = True
+    disparos_max_file_mb: int = 16
+    disparos_drive_folder: str = ""
+
+    # Auth do painel
+    painel_jwt_secret: str = "change-me-in-prod"
+    painel_jwt_expire_hours: int = 12
+    painel_default_admin_user: str = "admin"
+    painel_default_admin_pass: str = ""
+
     # Misc
     dry_run: bool = False
     log_level: str = "INFO"

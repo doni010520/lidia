@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from loguru import logger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Contact, Message
@@ -41,14 +41,27 @@ async def execute(
         delete(Contact).where(Contact.telefone == telefone)
     )
 
+    # Anonimizar trilha em disparo_log (preserva auditoria sem PII)
+    await db.execute(
+        text("""
+            UPDATE disparo_log
+            SET telefone = 'ANONIMIZADO',
+                nome     = 'ANONIMIZADO',
+                erro     = NULL
+            WHERE telefone = :telefone
+        """),
+        {"telefone": telefone},
+    )
+
     await db.commit()
 
     logger.bind(phone=telefone).info(
-        f"Usuário excluído (LGPD): {nome} — {msgs_deleted} mensagens removidas"
+        f"Usuário excluído (LGPD): {nome} — {msgs_deleted} mensagens removidas + disparo_log anonimizado"
     )
     return (
         f"Dados excluídos com sucesso.\n"
         f"Nome: {nome}\n"
         f"Mensagens removidas: {msgs_deleted}\n"
-        f"Contato removido do sistema."
+        f"Contato removido do sistema.\n"
+        f"Registros de disparo anonimizados."
     )
