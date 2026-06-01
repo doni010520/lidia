@@ -267,7 +267,6 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
 
     # ── 11. Persistir novas mensagens do tool loop ──
     new_entries = updated_history[history_len_before:]
-    log.info(f"new_entries={len(new_entries)} roles={[e.get('role') for e in new_entries]} reply_text_len={len(reply_text or '')}")
     for entry in new_entries:
         await save_message(
             db,
