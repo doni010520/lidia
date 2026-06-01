@@ -1,13 +1,12 @@
-"""Cliente Google Drive via Service Account.
+"""Cliente Google Drive.
 
-Operações:
-- search(query, folder_id): busca arquivos por nome
-- upload_bytes(content, filename, mimetype, folder_id): upload de bytes
-- get_public_url(file_id): gera link público (viewable)
-- list_files(folder_id): lista arquivos de uma pasta
+Estratégia:
+- Se `N8N_GOOGLE_WEBHOOK_URL` estiver setado → chamadas vão para o n8n proxy.
+- Caso contrário → fallback para Service Account local.
 """
 from __future__ import annotations
 
+import base64
 import io
 from pathlib import Path
 from typing import Any
@@ -16,12 +15,13 @@ from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+from app.services import n8n_google_proxy
 
 _service = None
 
 
 def _get_service():
-    """Lazy init do serviço Google Drive."""
+    """Lazy init do serviço Google Drive (SA local)."""
     global _service
     if _service is not None:
         return _service
@@ -39,7 +39,7 @@ def _get_service():
         scopes=["https://www.googleapis.com/auth/drive"],
     )
     _service = build("drive", "v3", credentials=creds, cache_discovery=False)
-    logger.info("Google Drive client inicializado")
+    logger.info("Google Drive client inicializado (SA local)")
     return _service
 
 
@@ -51,6 +51,17 @@ def search(
     max_results: int = 20,
 ) -> list[dict[str, Any]]:
     """Busca arquivos no Drive por nome (contains, case-insensitive)."""
+    if n8n_google_proxy.is_enabled():
+        try:
+            data = n8n_google_proxy.call(
+                "drive.search",
+                {"query": query, "folder_id": folder_id, "max_results": max_results},
+            )
+            return data if isinstance(data, list) else data.get("files", [])
+        except Exception as e:
+            logger.warning(f"Proxy n8n falhou em drive.search: {e}")
+            return []
+
     service = _get_service()
     if service is None:
         return []
@@ -81,6 +92,17 @@ def list_files(
     max_results: int = 50,
 ) -> list[dict[str, Any]]:
     """Lista arquivos de uma pasta do Drive."""
+    if n8n_google_proxy.is_enabled():
+        try:
+            data = n8n_google_proxy.call(
+                "drive.list",
+                {"folder_id": folder_id, "max_results": max_results},
+            )
+            return data if isinstance(data, list) else data.get("files", [])
+        except Exception as e:
+            logger.warning(f"Proxy n8n falhou em drive.list: {e}")
+            return []
+
     service = _get_service()
     if service is None:
         return []
@@ -106,6 +128,27 @@ def upload_bytes(
     folder_id: str | None = None,
 ) -> str:
     """Upload de bytes para o Drive. Retorna file_id."""
+    if n8n_google_proxy.is_enabled():
+        b64 = base64.b64encode(content).decode("ascii")
+        try:
+            data = n8n_google_proxy.call(
+                "drive.upload",
+                {
+                    "filename": filename,
+                    "mimetype": mimetype,
+                    "folder_id": folder_id,
+                    "content_b64": b64,
+                },
+            )
+            file_id = data.get("id") if isinstance(data, dict) else data
+            if not file_id:
+                raise RuntimeError("Proxy n8n não retornou file_id")
+            logger.info(f"Drive upload (n8n): {filename} → {file_id}")
+            return file_id
+        except Exception as e:
+            logger.error(f"Proxy n8n falhou em drive.upload: {e}")
+            raise
+
     service = _get_service()
     if service is None:
         raise RuntimeError("Drive client não disponível")
@@ -130,7 +173,6 @@ def upload_bytes(
     file_id = file["id"]
     logger.info(f"Drive upload: {filename} → {file_id}")
 
-    # Tornar publicamente acessível (anyone with link)
     try:
         service.permissions().create(
             fileId=file_id,
@@ -140,6 +182,40 @@ def upload_bytes(
         logger.warning(f"Falha ao compartilhar {file_id} publicamente")
 
     return file_id
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
+def download_file(file_id: str) -> tuple[bytes, str, str]:
+    """Baixa um arquivo do Drive. Retorna (content_bytes, mimetype, name)."""
+    if n8n_google_proxy.is_enabled():
+        try:
+            data = n8n_google_proxy.call("drive.download", {"file_id": file_id})
+            if not isinstance(data, dict):
+                raise RuntimeError("Resposta inválida do proxy n8n")
+            content_b64 = data.get("content_b64", "")
+            return (
+                base64.b64decode(content_b64),
+                data.get("mimetype", "application/octet-stream"),
+                data.get("name", file_id),
+            )
+        except Exception as e:
+            logger.error(f"Proxy n8n falhou em drive.download: {e}")
+            raise
+
+    service = _get_service()
+    if service is None:
+        raise RuntimeError("Drive client não disponível")
+
+    from googleapiclient.http import MediaIoBaseDownload
+
+    meta = service.files().get(fileId=file_id, fields="name, mimeType").execute()
+    request = service.files().get_media(fileId=file_id)
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    return buf.getvalue(), meta.get("mimeType", "application/octet-stream"), meta.get("name", file_id)
 
 
 def get_public_url(file_id: str) -> str:

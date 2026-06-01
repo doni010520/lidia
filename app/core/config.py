@@ -88,6 +88,13 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_key: str = ""
 
+    # ── n8n Google Proxy ──
+    # Quando setado, sheets/drive/gmail clients usam o webhook n8n
+    # em vez de chamar Google APIs diretamente (não precisa de SA local).
+    n8n_google_webhook_url: str = ""
+    n8n_google_token: str = ""
+    n8n_google_timeout_seconds: int = 30
+
     @property
     def admin_phones_list(self) -> list[str]:
         if not self.admin_phones:
