@@ -50,8 +50,13 @@ class RAGService:
                 {"embedding": str(embedding), "limit": k, "filter": json.dumps(filter_json)},
             )
             rows = result.fetchall()
-        except Exception:
-            logger.warning("match_documents indisponivel, fallback")
+        except Exception as e:
+            logger.warning(f"match_documents indisponivel ({type(e).__name__}: {str(e)[:200]}), fallback")
+            # Postgres aborta a transação no erro — precisa rollback antes do fallback
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             return await self._search_fallback(embedding, db, k, source_filter)
 
         chunks = [
