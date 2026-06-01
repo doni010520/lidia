@@ -240,7 +240,7 @@ async def sync_informacoes() -> int:
                 await db.execute(
                     text("""
                         INSERT INTO knowledge_chunks (content, embedding, metadata, source)
-                        VALUES (:content, :embedding::vector, :metadata::jsonb, :source)
+                        VALUES (:content, CAST(:embedding AS vector), CAST(:metadata AS jsonb), :source)
                     """),
                     {
                         "content": t["content"],

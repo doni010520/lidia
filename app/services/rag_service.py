@@ -45,7 +45,7 @@ class RAGService:
             result = await db.execute(
                 text("""
                     SELECT content, source, similarity AS score
-                    FROM match_documents(:embedding::vector, :limit, :filter::jsonb)
+                    FROM match_documents(CAST(:embedding AS vector), :limit, CAST(:filter AS jsonb))
                 """),
                 {"embedding": str(embedding), "limit": k, "filter": json.dumps(filter_json)},
             )
@@ -70,9 +70,9 @@ class RAGService:
             params["src"] = source_filter
         sql = text(f"""
             SELECT content, source,
-                   1 - (embedding <=> :embedding::vector) AS score
+                   1 - (embedding <=> CAST(:embedding AS vector)) AS score
             FROM knowledge_chunks {where}
-            ORDER BY embedding <=> :embedding::vector LIMIT :limit
+            ORDER BY embedding <=> CAST(:embedding AS vector) LIMIT :limit
         """)
         try:
             result = await db.execute(sql, params)

@@ -59,7 +59,7 @@ async def execute(
     await db.execute(
         text("""
             INSERT INTO knowledge_chunks (content, embedding, metadata, source)
-            VALUES (:content, :embedding::vector, :metadata::jsonb, 'informacoes_lidia')
+            VALUES (:content, CAST(:embedding AS vector), CAST(:metadata AS jsonb), 'informacoes_lidia')
         """),
         {
             "content": content,
