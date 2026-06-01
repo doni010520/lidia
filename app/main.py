@@ -114,6 +114,58 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     logger.info("Disparo scheduler agendado a cada 1min")
 
+    # ── Aniversariantes (diário 8h BR) ──
+    from app.workers.aniversarios import check_aniversariantes
+    scheduler.add_job(
+        check_aniversariantes,
+        "cron",
+        hour=8, minute=0,
+        timezone="America/Sao_Paulo",
+        id="aniversarios",
+        name="Aniversariantes do dia",
+        misfire_grace_time=3600,
+    )
+    logger.info("Aniversariantes agendado diariamente as 8h BR")
+
+    # ── Disparo Lideranças (terças 9h BR) ──
+    from app.workers.disparo_liderancas import disparar_liderancas
+    scheduler.add_job(
+        disparar_liderancas,
+        "cron",
+        day_of_week="tue", hour=9, minute=0,
+        timezone="America/Sao_Paulo",
+        id="disparo_liderancas",
+        name="Disparo semanal para liderancas",
+        misfire_grace_time=3600,
+    )
+    logger.info("Disparo de liderancas agendado para tercas 9h BR")
+
+    # ── Boas-vindas a novos convertidos (segundas 10h BR) ──
+    from app.workers.boas_vindas_convertidos import disparar_boas_vindas
+    scheduler.add_job(
+        disparar_boas_vindas,
+        "cron",
+        day_of_week="mon", hour=10, minute=0,
+        timezone="America/Sao_Paulo",
+        id="boas_vindas_convertidos",
+        name="Boas-vindas a novos convertidos",
+        misfire_grace_time=3600,
+    )
+    logger.info("Boas-vindas a convertidos agendado para segundas 10h BR")
+
+    # ── Gerar cultos dominicais (dia 1 do mes, 1h BR) ──
+    from app.workers.cultos_gerador import gerar_cultos_proximos_meses
+    scheduler.add_job(
+        gerar_cultos_proximos_meses,
+        "cron",
+        day=1, hour=1, minute=0,
+        timezone="America/Sao_Paulo",
+        id="cultos_gerador",
+        name="Gerar cultos dominicais",
+        misfire_grace_time=86400,
+    )
+    logger.info("Cultos dominicais agendado para dia 1 as 1h BR")
+
     scheduler.start()
     logger.info(f"APScheduler iniciado ({len(scheduler.get_jobs())} jobs)")
 

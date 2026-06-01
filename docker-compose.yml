@@ -17,6 +17,9 @@ services:
       - ./migrations/002_unique_eventos.sql:/docker-entrypoint-initdb.d/002_unique_eventos.sql:ro
       - ./migrations/003_disparos.sql:/docker-entrypoint-initdb.d/003_disparos.sql:ro
       - ./migrations/005_eventos_origem.sql:/docker-entrypoint-initdb.d/005_eventos_origem.sql:ro
+      - ./migrations/006_atendimentos_e_funcoes.sql:/docker-entrypoint-initdb.d/006_atendimentos_e_funcoes.sql:ro
+      - ./migrations/007_pastores_e_liderancas.sql:/docker-entrypoint-initdb.d/007_pastores_e_liderancas.sql:ro
+      - ./migrations/008_contacts_campos_extra.sql:/docker-entrypoint-initdb.d/008_contacts_campos_extra.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lidia}"]
       interval: 5s
