@@ -61,7 +61,6 @@ async def webhook_handler(request: Request) -> Response:
     if msg is None:
         logger.debug("Payload sem dados suficientes, ignorando")
         return Response(status_code=200)
-    _set_outcome(f"queued for phone={msg.phone}")
 
     phone_log = logger.bind(phone=msg.phone, message_id=msg.message_id)
 
