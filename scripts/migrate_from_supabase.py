@@ -46,6 +46,8 @@ def _headers():
 
 
 async def _fetch_paginated(table, page_size=1000):
+    """Pagina mesmo se o servidor cortar abaixo do page_size pedido.
+    Só para quando o batch vier vazio."""
     rows = []
     offset = 0
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -57,9 +59,7 @@ async def _fetch_paginated(table, page_size=1000):
             if not batch:
                 break
             rows.extend(batch)
-            if len(batch) < page_size:
-                break
-            offset += page_size
+            offset += len(batch)
     return rows
 
 
@@ -304,7 +304,7 @@ async def migrate_pastores(dry):
 
 
 async def migrate_atendimentos_log(dry):
-    rows = await _fetch_paginated("paes_atendimentos_log", page_size=2000)
+    rows = await _fetch_paginated("paes_atendimentos_log")
     logger.info(f"paes_atendimentos_log: {len(rows)}")
     if dry:
         return len(rows)
@@ -327,7 +327,7 @@ async def migrate_atendimentos_log(dry):
 
 
 async def migrate_analytics(dry):
-    rows = await _fetch_paginated("llm_analytics", page_size=2000)
+    rows = await _fetch_paginated("llm_analytics")
     logger.info(f"llm_analytics: {len(rows)}")
     if dry:
         return len(rows)
