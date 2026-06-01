@@ -256,6 +256,7 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     async def _tool_handler(tool_name: str, args: dict, phone: str) -> str:
         return await handle_tool_call(tool_name, args, phone, db=db)
 
+    history_len_before = len(history)  # snapshot ANTES do chat (chat muta history in-place)
     reply_text, updated_history, tools_called = await oai.chat(
         messages=history,
         system_prompt=system_prompt,
@@ -265,7 +266,7 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     )
 
     # ── 11. Persistir novas mensagens do tool loop ──
-    new_entries = updated_history[len(history):]
+    new_entries = updated_history[history_len_before:]
     log.info(f"new_entries={len(new_entries)} roles={[e.get('role') for e in new_entries]} reply_text_len={len(reply_text or '')}")
     for entry in new_entries:
         await save_message(
