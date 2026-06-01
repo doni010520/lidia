@@ -87,7 +87,7 @@ async def execute(
                     dt += f" a {ev.data_final.strftime('%d/%m/%Y')}"
                 parts.append(f"Data: {dt}")
             if ev.hora:
-                parts.append(f"Horário: {ev.hora.strftime('%H:%M')}")
+                parts.append(f"Horário: {ev.hora}")
             if ev.local:
                 parts.append(f"Local: {ev.local}")
             if ev.descricao:

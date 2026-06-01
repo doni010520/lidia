@@ -1,7 +1,7 @@
 """Tool: eventos_Lidia — ADMIN: CRUD de eventos no banco."""
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date
 
 from loguru import logger
 from sqlalchemy import delete, select, text
@@ -19,14 +19,11 @@ def _parse_date(s: str | None) -> date | None:
         return None
 
 
-def _parse_time(s: str | None) -> time | None:
+def _parse_time(s: str | None) -> str | None:
+    """Hora é texto livre (ex: '18hrs', '10:00', 'manhã')."""
     if not s:
         return None
-    try:
-        parts = s.split(":")
-        return time(int(parts[0]), int(parts[1]))
-    except (ValueError, IndexError):
-        return None
+    return str(s).strip() or None
 
 
 async def execute(

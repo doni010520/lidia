@@ -1,7 +1,7 @@
 """Schemas Pydantic para o módulo de Eventos."""
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -12,7 +12,7 @@ class EventoCreate(BaseModel):
     local: str | None = None
     data_inicio: date
     data_final: date | None = None
-    hora: time | None = None
+    hora: str | None = None
     valor: str | None = None
     link: str | None = None
     media: str | None = None
@@ -24,7 +24,7 @@ class EventoUpdate(BaseModel):
     local: str | None = None
     data_inicio: date | None = None
     data_final: date | None = None
-    hora: time | None = None
+    hora: str | None = None
     valor: str | None = None
     link: str | None = None
     media: str | None = None
@@ -38,7 +38,7 @@ class EventoOut(BaseModel):
     local: str | None
     data_inicio: date | None
     data_final: date | None
-    hora: time | None
+    hora: str | None
     valor: str | None
     link: str | None
     media: str | None

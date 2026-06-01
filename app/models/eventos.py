@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Index, Integer, String, Text, Time, func
+from sqlalchemy import CheckConstraint, Date, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -17,7 +17,7 @@ class EventoPaes(Base):
     local: Mapped[str | None] = mapped_column(Text)
     data_inicio: Mapped[date | None] = mapped_column(Date)
     data_final: Mapped[date | None] = mapped_column(Date)
-    hora: Mapped[time | None] = mapped_column(Time)
+    hora: Mapped[str | None] = mapped_column(Text)  # formato livre: "18hrs", "manhã", etc
     valor: Mapped[str | None] = mapped_column(Text)
     link: Mapped[str | None] = mapped_column(Text)
     media: Mapped[str | None] = mapped_column(Text)
