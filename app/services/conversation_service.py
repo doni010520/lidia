@@ -155,65 +155,6 @@ async def save_message(
     )
 
 
-# ── Admin command handler ──
-
-async def _handle_admin_command(cmd, msg, db, uaz, log) -> None:
-    """Despacha comando admin por handler type."""
-    from app.routers.admin_router import AdminCommand
-
-    log.info(f"Admin command: {cmd.handler} → '{cmd.payload[:60]}'")
-
-    reply = ""
-
-    if cmd.handler == "treino":
-        from app.tools.tool_modules.treinamento_lidia import execute
-        reply = await execute({}, msg.phone, db)
-
-    elif cmd.handler == "agenda":
-        from app.tools.tool_modules.eventos_lidia import execute
-        # Parsear payload simples: "cadastrar Nome | Data | Local"
-        parts = [p.strip() for p in cmd.payload.split("|")]
-        funcao = parts[0].lower() if parts else "cadastrar"
-        nome = parts[1] if len(parts) > 1 else cmd.payload
-        args = {"funcao": funcao, "Nome": nome}
-        if len(parts) > 2:
-            args["Data_inicio"] = parts[2]
-        if len(parts) > 3:
-            args["Local"] = parts[3]
-        reply = await execute(args, msg.phone, db)
-
-    elif cmd.handler == "arquivos":
-        reply = (
-            "Para gerenciar arquivos, use as tools na conversa normal:\n"
-            "• PAES_listar_arquivos — buscar por nome\n"
-            "• PAES_download_arquivos — enviar para contato"
-        )
-
-    elif cmd.handler == "resposta_oracao":
-        from app.workers.oracao_responder import check_and_send
-        count = await check_and_send()
-        reply = f"Orações processadas: {count} resposta(s) enviada(s)."
-
-    elif cmd.handler == "limpar":
-        from sqlalchemy import delete, text
-        from app.models.conversation import Message
-        phone_target = cmd.payload.strip() or msg.phone
-        result = await db.execute(
-            delete(Message).where(Message.phone == phone_target)
-        )
-        await db.commit()
-        reply = f"Histórico limpo: {result.rowcount} mensagens removidas de {phone_target}."
-
-    else:
-        reply = f"Comando admin '{cmd.handler}' não reconhecido."
-
-    if reply:
-        try:
-            await uaz.send_text(msg.phone, reply)
-        except Exception:
-            log.exception("Erro ao enviar resposta admin")
-
-
 # ── Pipeline principal ──
 
 async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
@@ -264,13 +205,6 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
 
     if not user_text.strip():
         log.debug("Mensagem sem texto, ignorando")
-        return
-
-    # ── 2.5 Verificar comando admin ──
-    from app.routers.admin_router import parse_admin_command
-    admin_cmd = parse_admin_command(msg)
-    if admin_cmd:
-        await _handle_admin_command(admin_cmd, msg, db, uaz, log)
         return
 
     # ── 3. Pré-busca RAG ──

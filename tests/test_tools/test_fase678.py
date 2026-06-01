@@ -92,69 +92,6 @@ class TestRespostaOracao:
         assert "registrado" in result.lower()
 
 
-# ── Fase 7: admin_router ──
-
-class TestAdminRouter:
-    def test_parse_treino_command(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581999999999"]))
-        from app.routers.admin_router import parse_admin_command
-
-        msg = IncomingMessage(phone="5581999999999", text="TreinoIA12 atualizar base")
-        cmd = parse_admin_command(msg)
-
-        assert cmd is not None
-        assert cmd.handler == "treino"
-        assert cmd.payload == "atualizar base"
-
-    def test_parse_agenda_command(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581999999999"]))
-        from app.routers.admin_router import parse_admin_command
-
-        msg = IncomingMessage(phone="5581999999999", text="AgendaIA12 Culto dominical")
-        cmd = parse_admin_command(msg)
-
-        assert cmd is not None
-        assert cmd.handler == "agenda"
-
-    def test_non_admin_returns_none(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581111111111"]))
-        from app.routers.admin_router import parse_admin_command
-
-        msg = IncomingMessage(phone="5581999999999", text="TreinoIA12 hack")
-        cmd = parse_admin_command(msg)
-        assert cmd is None
-
-    def test_no_prefix_returns_none(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581999999999"]))
-        from app.routers.admin_router import parse_admin_command
-
-        msg = IncomingMessage(phone="5581999999999", text="Olá, bom dia!")
-        cmd = parse_admin_command(msg)
-        assert cmd is None
-
-    def test_is_admin(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581999", "5581888"]))
-        from app.routers.admin_router import is_admin
-        assert is_admin("5581999") is True
-        assert is_admin("5581000") is False
-
-    def test_limpar_dados_prefix(self, monkeypatch):
-        monkeypatch.setattr("app.routers.admin_router.settings",
-                           MagicMock(admin_phones_list=["5581999999999"]))
-        from app.routers.admin_router import parse_admin_command
-
-        msg = IncomingMessage(phone="5581999999999", text="Limpar dados 5581888888888")
-        cmd = parse_admin_command(msg)
-        assert cmd is not None
-        assert cmd.handler == "limpar"
-        assert cmd.payload == "5581888888888"
-
-
 # ── Fase 8: handoff_service ──
 
 class TestHandoffService:

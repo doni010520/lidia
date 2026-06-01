@@ -29,7 +29,7 @@ TOOLS_ALLOWED: list[str] = [
 ]
 tools_allowed: list[dict] = get_tools(TOOLS_ALLOWED)
 
-# Tools administrativas — usadas apenas quando admin_router detecta prefixo
+# Tools administrativas — disponíveis somente via painel (não expostas ao agente)
 ADMIN_TOOLS: list[str] = [
     "eventos_Lidia",
     "informacoes_Lidia",
