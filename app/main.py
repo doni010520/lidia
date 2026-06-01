@@ -33,6 +33,12 @@ def _setup_logging() -> None:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup / Shutdown."""
     _setup_logging()
+    # Re-instalar sink de debug DEPOIS do _setup_logging (que faz logger.remove())
+    try:
+        from app.api.debug_stats import _log_sink
+        logger.add(_log_sink, level="DEBUG", format="{message}")
+    except Exception:
+        pass
     logger.info(f"Iniciando {settings.agent_name} ({settings.env})")
 
     # ── Serviços ──

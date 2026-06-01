@@ -33,11 +33,7 @@ def _log_sink(message) -> None:
     })
 
 
-# Instalar sink na importação do módulo
-try:
-    logger.add(_log_sink, level="WARNING", format="{message}")
-except Exception:
-    pass
+# Sink é registrado no lifespan startup de main.py (após _setup_logging).
 
 
 def _check(token: str) -> None:
