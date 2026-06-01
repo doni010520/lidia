@@ -79,6 +79,15 @@ class Settings(BaseSettings):
     dry_run: bool = False
     log_level: str = "INFO"
 
+
+    # ── Workers PAES ──
+    drive_video_boas_vindas: str = ""
+    cultos_dominicais_meses_a_frente: int = 3
+
+    # ── Migração Supabase (one-shot) ──
+    supabase_url: str = ""
+    supabase_key: str = ""
+
     @property
     def admin_phones_list(self) -> list[str]:
         if not self.admin_phones:

@@ -144,6 +144,14 @@ psql "$DATABASE_URL" -f migrations/001_lidia_schema.sql
 psql "$DATABASE_URL" -f migrations/002_unique_eventos.sql
 psql "$DATABASE_URL" -f migrations/003_disparos.sql
 psql "$DATABASE_URL" -f migrations/005_eventos_origem.sql
+psql "$DATABASE_URL" -f migrations/006_atendimentos_e_funcoes.sql
+psql "$DATABASE_URL" -f migrations/007_pastores_e_liderancas.sql
+psql "$DATABASE_URL" -f migrations/008_contacts_campos_extra.sql
+
+# Migration 006 instala:
+#   - tabela paes_atendimentos_log + 2 triggers em contacts
+#   - function match_documents (RAG com filtro de data)
+#   - function gerar_cultos_dominicais
 
 # Confirmar que pgvector e todas as tabelas existem
 psql "$DATABASE_URL" -c "\dx"
