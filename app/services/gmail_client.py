@@ -1,4 +1,9 @@
-"""Cliente Gmail via Service Account — envio de emails de notificação."""
+"""Cliente Gmail.
+
+Estratégia:
+- Se `N8N_GOOGLE_WEBHOOK_URL` estiver setado → envio via n8n proxy.
+- Caso contrário → fallback para Service Account local (gmail.send + DWD).
+"""
 from __future__ import annotations
 
 import base64
@@ -9,6 +14,7 @@ from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+from app.services import n8n_google_proxy
 
 _service = None
 
@@ -32,7 +38,7 @@ def _get_service():
         subject=settings.gmail_from,
     )
     _service = build("gmail", "v1", credentials=creds, cache_discovery=False)
-    logger.info("Gmail client inicializado")
+    logger.info("Gmail client inicializado (SA local)")
     return _service
 
 
@@ -42,7 +48,24 @@ def send_email(
     subject: str,
     body: str,
 ) -> dict:
-    """Envia email via Gmail API."""
+    """Envia email."""
+    if n8n_google_proxy.is_enabled():
+        try:
+            result = n8n_google_proxy.call(
+                "gmail.send",
+                {
+                    "to": to,
+                    "subject": subject,
+                    "body": body,
+                    "from": settings.gmail_from,
+                },
+            )
+            logger.debug(f"Email enviado (n8n) para {to}: {subject}")
+            return result if isinstance(result, dict) else {"id": str(result)}
+        except Exception as e:
+            logger.warning(f"Proxy n8n falhou em gmail.send: {e}")
+            return {}
+
     service = _get_service()
     if service is None:
         logger.warning("Gmail client não disponível, email não enviado")
