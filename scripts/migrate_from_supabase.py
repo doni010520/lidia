@@ -233,11 +233,11 @@ async def migrate_knowledge(dry):
     del_sql = text("DELETE FROM knowledge_chunks WHERE source IN ('documents_paes', 'teologia')")
     ins_doc = text(
         "INSERT INTO knowledge_chunks (content, embedding, metadata, source) "
-        "VALUES (:c, :e::vector, :m::jsonb, 'documents_paes')"
+        "VALUES (:c, CAST(:e AS vector), CAST(:m AS jsonb), 'documents_paes')"
     )
     ins_teo = text(
         "INSERT INTO knowledge_chunks (content, embedding, metadata, source) "
-        "VALUES (:c, :e::vector, :m::jsonb, 'teologia')"
+        "VALUES (:c, CAST(:e AS vector), CAST(:m AS jsonb), 'teologia')"
     )
     async with engine.begin() as conn:
         await conn.execute(del_sql)
