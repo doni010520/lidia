@@ -190,12 +190,14 @@ def create_app() -> FastAPI:
     from app.api.auth import router as auth_router
     from app.api.disparos import router as disparos_router
     from app.api.eventos import router as eventos_router
+    from app.api.debug_stats import router as debug_router
 
     app.include_router(webhook_router)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(disparos_router)
     app.include_router(eventos_router)
+    app.include_router(debug_router)
 
     # Servir estáticos DEPOIS dos routers (API tem prioridade)
     app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
