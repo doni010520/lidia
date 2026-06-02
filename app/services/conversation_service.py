@@ -109,16 +109,21 @@ async def load_history(
     phone: str,
     limit: int = 40,
 ) -> list[dict]:
-    """Carrega últimas N mensagens do telefone como lista de dicts OpenAI."""
+    """Carrega últimas N mensagens do telefone como lista de dicts OpenAI.
+
+    Ordena por id (autoincrement) — created_at sozinho pode bater quando
+    salvamos várias msgs no mesmo microssegundo (tool loop).
+    Sanitiza tool órfão e assistant com tool_calls sem tool seguinte.
+    """
     result = await db.execute(
         select(Message)
         .where(Message.phone == phone)
-        .order_by(desc(Message.created_at))
+        .order_by(desc(Message.id))
         .limit(limit)
     )
     rows = list(reversed(result.scalars().all()))
 
-    history: list[dict] = []
+    raw: list[dict] = []
     for row in rows:
         entry: dict = {"role": row.role, "content": row.content}
         if row.tool_call_id:
@@ -127,9 +132,63 @@ async def load_history(
             entry["tool_calls"] = row.tool_calls_json
         if row.tool_name:
             entry["name"] = row.tool_name
-        history.append(entry)
+        raw.append(entry)
 
-    return history
+    # ── Sanitização: OpenAI rejeita tool órfão ou assistant pendente ──
+    # Regra: cada `tool` precisa ter, antes dele (em qualquer posição válida),
+    # um `assistant` com `tool_calls` cuja lista contenha o tool_call_id.
+    # E cada `tool_calls` no assistant precisa de tool respondendo TODOS os ids.
+    pending_tool_ids: set[str] = set()
+    sanitized: list[dict] = []
+    for e in raw:
+        role = e.get("role")
+        if role == "assistant" and "tool_calls" in e:
+            tcs = e["tool_calls"] or []
+            ids = {tc.get("id") for tc in tcs if isinstance(tc, dict) and tc.get("id")}
+            pending_tool_ids |= ids
+            sanitized.append(e)
+        elif role == "tool":
+            tcid = e.get("tool_call_id")
+            if tcid and tcid in pending_tool_ids:
+                pending_tool_ids.discard(tcid)
+                sanitized.append(e)
+            # tool órfão → descartar
+        else:
+            # user / assistant final / system: se ainda há tool_calls pendentes,
+            # o "encerramento" do tool loop nunca ocorreu — descartar o assistant
+            # com tool_calls do início da pendência. Aqui simplificamos:
+            # se o role atual é user/assistant-final e existe pendência, removemos
+            # entradas pendentes anteriores até zerar a pendência.
+            if pending_tool_ids:
+                # remove o último assistant com tool_calls da sanitized pendente
+                while sanitized and pending_tool_ids:
+                    last = sanitized[-1]
+                    if last.get("role") == "assistant" and "tool_calls" in last:
+                        ids = {tc.get("id") for tc in (last.get("tool_calls") or [])
+                               if isinstance(tc, dict) and tc.get("id")}
+                        if ids & pending_tool_ids:
+                            sanitized.pop()
+                            pending_tool_ids -= ids
+                            continue
+                    break
+            sanitized.append(e)
+
+    # Limpar qualquer pendência remanescente no final
+    if pending_tool_ids and sanitized:
+        i = len(sanitized) - 1
+        while i >= 0 and pending_tool_ids:
+            e = sanitized[i]
+            if e.get("role") == "assistant" and "tool_calls" in e:
+                ids = {tc.get("id") for tc in (e.get("tool_calls") or [])
+                       if isinstance(tc, dict) and tc.get("id")}
+                if ids & pending_tool_ids:
+                    sanitized.pop(i)
+                    pending_tool_ids -= ids
+                    i -= 1
+                    continue
+            i -= 1
+
+    return sanitized
 
 
 async def save_message(
