@@ -59,12 +59,12 @@ async def recent_messages(token: str = Query(...), limit: int = Query(30), phone
     async with async_session_factory() as db:
         if phone:
             r = await db.execute(text(
-                "SELECT phone, role, content, tool_name, created_at "
+                "SELECT phone, role, content, tool_name, tool_call_id, tool_calls_json, created_at "
                 "FROM messages WHERE phone = :p ORDER BY created_at DESC LIMIT :n"
             ), {"p": phone, "n": limit})
         else:
             r = await db.execute(text(
-                "SELECT phone, role, content, tool_name, created_at "
+                "SELECT phone, role, content, tool_name, tool_call_id, tool_calls_json, created_at "
                 "FROM messages ORDER BY created_at DESC LIMIT :n"
             ), {"n": limit})
         rows = [dict(row._mapping) for row in r.all()]
@@ -89,6 +89,30 @@ async def contact_info(token: str = Query(...), phone: str = Query(...)):
         if hasattr(v, "isoformat"):
             d[k] = v.isoformat()
     return {"found": True, "contact": d}
+
+
+@router.get("/history-debug")
+async def history_debug(token: str = Query(...), phone: str = Query(...), limit: int = Query(50)):
+    """Mostra história crua + identifica problemas (tool órfão, etc)."""
+    _check(token)
+    from app.services.conversation_service import load_history
+    async with async_session_factory() as db:
+        history = await load_history(db, phone, limit=limit)
+    issues = []
+    for i, e in enumerate(history):
+        role = e.get("role")
+        if role == "tool" and (i == 0 or "tool_calls" not in history[i-1]):
+            issues.append({"index": i, "issue": "tool sem tool_calls precedente", "entry": e})
+        if role == "assistant" and not e.get("content") and not e.get("tool_calls"):
+            issues.append({"index": i, "issue": "assistant vazio sem tool_calls", "entry": {"role": role, "content_len": 0}})
+    return {
+        "history_length": len(history),
+        "issues": issues,
+        "snippet": [{"i": i, "role": e.get("role"), "content_len": len(e.get("content") or ""),
+                     "has_tool_calls": "tool_calls" in e, "tool_call_id": e.get("tool_call_id"),
+                     "name": e.get("name")}
+                    for i, e in enumerate(history)],
+    }
 
 
 @router.get("/logs")
