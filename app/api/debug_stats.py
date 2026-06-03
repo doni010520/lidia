@@ -115,6 +115,33 @@ async def history_debug(token: str = Query(...), phone: str = Query(...), limit:
     }
 
 
+@router.post("/test-tool")
+async def test_tool(token: str = Query(...), name: str = Query(...),
+                    phone: str = Query("557193061031"), args: str = Query("{}")):
+    """Invoca uma tool diretamente sem passar pelo LLM/webhook.
+    args: JSON string com os argumentos.
+    Retorna o resultado da tool + qualquer exceção capturada."""
+    _check(token)
+    import json as _json
+    import traceback
+    try:
+        parsed_args = _json.loads(args) if isinstance(args, str) else (args or {})
+    except Exception as e:
+        return {"ok": False, "error": f"args inválido: {e}"}
+
+    from app.tools.handlers import handle_tool_call
+    async with async_session_factory() as db:
+        try:
+            result = await handle_tool_call(name, parsed_args, phone, db=db)
+            return {"ok": True, "result": result if isinstance(result, str) else str(result)[:2000]}
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": f"{type(e).__name__}: {str(e)[:300]}",
+                "traceback": traceback.format_exc()[:2500],
+            }
+
+
 @router.get("/logs")
 async def logs(token: str = Query(...), level: str = Query(""), grep: str = Query(""), limit: int = Query(200)):
     _check(token)
