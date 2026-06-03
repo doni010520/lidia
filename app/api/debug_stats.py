@@ -142,6 +142,26 @@ async def test_tool(token: str = Query(...), name: str = Query(...),
             }
 
 
+@router.get("/sql")
+async def debug_sql(token: str = Query(...), q: str = Query(...)):
+    """Executa SELECT/COUNT temporário. Bloqueia DDL/DML por segurança."""
+    _check(token)
+    qlow = q.strip().lower()
+    if not (qlow.startswith("select") or qlow.startswith("with")):
+        return {"error": "apenas SELECT/WITH permitido"}
+    async with async_session_factory() as db:
+        try:
+            r = await db.execute(text(q))
+            rows = [dict(row._mapping) for row in r.fetchall()][:200]
+            for row in rows:
+                for k, v in row.items():
+                    if hasattr(v, "isoformat"):
+                        row[k] = v.isoformat()
+            return {"count": len(rows), "rows": rows}
+        except Exception as e:
+            return {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+
 @router.get("/logs")
 async def logs(token: str = Query(...), level: str = Query(""), grep: str = Query(""), limit: int = Query(200)):
     _check(token)
