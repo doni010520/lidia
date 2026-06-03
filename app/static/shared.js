@@ -52,28 +52,8 @@ function defaultAuthReady() {
 
 window.onAuthReady = window.onAuthReady || defaultAuthReady;
 
-// AUTO-LOGIN DEV — remover depois.
-async function _autoLoginDev() {
-  if (isAuthed()) return true;
-  try {
-    const r = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'jE7eVjKE1YJ10Xu6Oyrx' }),
-    });
-    if (!r.ok) return false;
-    const d = await r.json();
-    sessionStorage.setItem('lidia_token', d.access_token);
-    sessionStorage.setItem('lidia_user', d.username);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-// Setup automático: tenta auto-login dev primeiro, depois auth.
-document.addEventListener('DOMContentLoaded', async () => {
-  await _autoLoginDev();
+// Setup automático: se tem token, pula login.
+document.addEventListener('DOMContentLoaded', () => {
   if (isAuthed()) {
     onAuthReady();
   }
