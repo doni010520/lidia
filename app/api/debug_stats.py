@@ -133,6 +133,11 @@ async def test_tool(token: str = Query(...), name: str = Query(...),
     async with async_session_factory() as db:
         try:
             result = await handle_tool_call(name, parsed_args, phone, db=db)
+            # Emular o commit que normalmente ocorre no pipeline (step 13)
+            try:
+                await db.commit()
+            except Exception:
+                pass
             return {"ok": True, "result": result if isinstance(result, str) else str(result)[:2000]}
         except Exception as e:
             return {

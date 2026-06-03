@@ -84,22 +84,24 @@ async def execute(
             except Exception:
                 logger.exception(f"Erro ao notificar {email} via email")
 
-    # 5. Append em Sheets log
-    if settings.sheets_log_notificacoes_id:
+    # 5. Append em Sheets — usa planilha da equipe (preferido), fallback log geral
+    sheets_target = equipe.sheets_log_url or settings.sheets_log_notificacoes_id
+    sent_sheets = False
+    if sheets_target:
         try:
             sheets_client.append_row(
-                settings.sheets_log_notificacoes_id,
+                sheets_target,
                 "A1",
                 [nome, tipo, telefone, detalhes, prioridade, now, equipe.equipe],
             )
+            sent_sheets = True
         except Exception:
-            logger.exception("Erro ao registrar notificação no Sheets")
+            logger.exception(f"Erro ao registrar notificação no Sheets ({sheets_target})")
 
     logger.bind(phone=telefone).info(
-        f"Notificação enviada: {equipe.equipe} (wpp={sent_wpp}, email={sent_email})"
+        f"Notificação: {equipe.equipe} (wpp={sent_wpp}, email={sent_email}, sheets={sent_sheets})"
     )
     return (
-        f"Equipe '{equipe.equipe}' notificada com sucesso.\n"
-        f"WhatsApp: {sent_wpp} mensagens enviadas.\n"
-        f"Email: {sent_email} emails enviados."
+        f"Equipe '{equipe.equipe}' notificada.\n"
+        f"WhatsApp: {sent_wpp} | Email: {sent_email} | Sheets: {'ok' if sent_sheets else 'falhou'}"
     )

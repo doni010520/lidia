@@ -26,7 +26,7 @@ async def execute(
         """),
         {"telefone": telefone, "nome": nome},
     )
-    await db.flush()
+    await db.commit()
 
     logger.bind(phone=telefone).info(f"Novo convertido registrado: {nome}")
     return f"Decisão por Cristo registrada com sucesso para {nome}. Glória a Deus! 🙏"
