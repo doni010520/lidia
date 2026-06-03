@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventos — LidIA</title>
+<link rel="stylesheet" href="/static/shared.css">
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h1>Lid<span class="accent">IA</span></h1>
+    <p class="subtitle">Paróquia Anglicana Espírito Santo</p>
+    <input type="text" id="loginUser" placeholder="Usuário" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="Senha" autocomplete="current-password">
+    <button class="btn-login" onclick="doLogin()">Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+</div>
+
+<header class="header" id="mainHeader" style="display:none;">
+  <div class="header-left">
+    <h1>Lid<span class="accent">IA</span> <span style="color:var(--text-muted);font-weight:400;font-size:14px;">PAES</span></h1>
+    <nav class="header-tabs">
+      <a class="tab-btn" href="/" data-tab="home">Início</a>
+      <a class="tab-btn" href="/disparos">Disparos</a>
+      <a class="tab-btn" href="/eventos">Eventos</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="user-name" id="userName"></span>
+    <button class="btn-logout" onclick="doLogout()">Sair</button>
+  </div>
+</header>
+
+<section class="section-wrap" id="eventosSection" style="display:none;">
+  <div class="card">
+    <h2 id="evtFormTitle">Novo evento</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Nome*</label><input type="text" id="evtNome"></div>
+      <div class="form-group"><label>Local</label><input type="text" id="evtLocal"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Data início*</label><input type="date" id="evtDataInicio"></div>
+      <div class="form-group"><label>Data final</label><input type="date" id="evtDataFinal"></div>
+      <div class="form-group"><label>Hora</label><input type="text" id="evtHora" placeholder="Ex: 18h, 10h às 12h"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Valor</label><input type="text" id="evtValor" placeholder="R$ 0,00 ou Gratuito"></div>
+      <div class="form-group"><label>Link</label><input type="url" id="evtLink"></div>
+    </div>
+    <div class="form-group"><label>Descrição</label><textarea id="evtDescricao" rows="3"></textarea></div>
+    <div class="form-group">
+      <label>Capa do evento (opcional)</label>
+      <div class="capa-dropzone" id="evtCapaDropzone">
+        <p>Arraste ou clique para selecionar imagem</p>
+        <input type="file" id="evtCapaInput" accept="image/*" hidden>
+      </div>
+      <div class="capa-preview" id="evtCapaPreview" style="display:none">
+        <img id="evtCapaImg"><br>
+        <button class="btn-remove" onclick="removerCapa()">Remover capa</button>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="salvarEvento()" id="btnSalvarEvento">Salvar evento</button>
+      <button class="btn btn-secondary" onclick="limparFormEvento()">Limpar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>Eventos cadastrados</h2>
+      <div class="filtros">
+        <select id="filtroEvtPeriodo" onchange="loadEventos()">
+          <option value="futuros">Futuros</option>
+          <option value="passados">Passados</option>
+          <option value="todos">Todos</option>
+        </select>
+        <select id="filtroEvtOrigem" onchange="loadEventos()">
+          <option value="todos">Todas origens</option>
+          <option value="painel">Só painel</option>
+          <option value="sheets">Só planilha</option>
+        </select>
+      </div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Nome</th><th>Data</th><th>Local</th><th>Valor</th><th>Origem</th><th>Ações</th></tr></thead>
+      <tbody id="eventosBody"></tbody>
+    </table>
+    <div class="empty-msg" id="eventosEmpty" style="display:none">Nenhum evento encontrado.</div>
+  </div>
+</section>
+
+<script src="/static/shared.js"></script>
+<script>
+window.onAuthReady = function () {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('mainHeader').style.display = '';
+  document.getElementById('eventosSection').style.display = '';
+  const userEl = document.getElementById('userName');
+  if (userEl) userEl.textContent = sessionStorage.getItem('lidia_user') || '';
+  loadEventos();
+};
+
+let evtCapaUrl = null;
+let editingEventoId = null;
+
+async function loadEventos() {
+  const p = document.getElementById('filtroEvtPeriodo').value;
+  const o = document.getElementById('filtroEvtOrigem').value;
+  try {
+    const r = await fetch('/api/eventos?periodo=' + p + '&origem=' + o, { headers: authHeaders() });
+    if (r.status === 401) { doLogout(); return; }
+    const evts = await r.json();
+    const tb = document.getElementById('eventosBody');
+    const em = document.getElementById('eventosEmpty');
+    if (!evts.length) { tb.innerHTML = ''; em.style.display = ''; return; }
+    em.style.display = 'none';
+    tb.innerHTML = evts.map((e) => {
+      const df = e.data_final && e.data_final !== e.data_inicio ? ' até ' + e.data_final : '';
+      return '<tr><td>' + e.nome + '</td><td>' + e.data_inicio + df + '</td>'
+        + '<td>' + (e.local || '-') + '</td><td>' + (e.valor || '-') + '</td>'
+        + '<td><span class="chip-origem ' + e.origem + '">' + e.origem + '</span></td>'
+        + '<td><button class="btn-link" onclick="editarEvento(' + e.id + ')">Editar</button> '
+        + '<button class="btn-link" onclick="deletarEvento(' + e.id + ',\'' + e.origem + '\')">Excluir</button></td></tr>';
+    }).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function salvarEvento() {
+  const pl = {
+    nome: document.getElementById('evtNome').value.trim(),
+    descricao: document.getElementById('evtDescricao').value.trim() || null,
+    local: document.getElementById('evtLocal').value.trim() || null,
+    data_inicio: document.getElementById('evtDataInicio').value,
+    data_final: document.getElementById('evtDataFinal').value || null,
+    hora: document.getElementById('evtHora').value || null,
+    valor: document.getElementById('evtValor').value.trim() || null,
+    link: document.getElementById('evtLink').value.trim() || null,
+    media: evtCapaUrl,
+  };
+  if (!pl.nome || !pl.data_inicio) return alert('Nome e data de início são obrigatórios.');
+  let url = '/api/eventos';
+  let method = 'POST';
+  if (editingEventoId) {
+    url = '/api/eventos/' + editingEventoId;
+    method = 'PATCH';
+  }
+  let resp = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(pl),
+  });
+  if (resp.status === 409) {
+    const d = await resp.json();
+    if (d.detail && d.detail.error === 'evento_de_planilha') {
+      if (confirm(d.detail.message + '\n\nConfirma descolar da planilha?')) {
+        pl.confirmar_descolar = true;
+        resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(pl),
+        });
+        if (resp.ok) {
+          alert('Evento atualizado e descolado da planilha.');
+          limparFormEvento();
+          loadEventos();
+          return;
+        }
+      } else { return; }
+    }
+  }
+  if (!resp.ok) return alert('Erro: ' + (await resp.text()));
+  alert(editingEventoId ? 'Evento atualizado!' : 'Evento criado!');
+  limparFormEvento();
+  loadEventos();
+}
+
+async function editarEvento(id) {
+  const resp = await fetch('/api/eventos?periodo=todos&origem=todos', { headers: authHeaders() });
+  const evts = await resp.json();
+  const e = evts.find((x) => x.id === id);
+  if (!e) return alert('Evento não encontrado');
+  editingEventoId = id;
+  document.getElementById('evtNome').value = e.nome || '';
+  document.getElementById('evtDescricao').value = e.descricao || '';
+  document.getElementById('evtLocal').value = e.local || '';
+  document.getElementById('evtDataInicio').value = e.data_inicio || '';
+  document.getElementById('evtDataFinal').value = e.data_final || '';
+  document.getElementById('evtHora').value = e.hora || '';
+  document.getElementById('evtValor').value = e.valor || '';
+  document.getElementById('evtLink').value = e.link || '';
+  evtCapaUrl = e.media;
+  if (e.media) {
+    document.getElementById('evtCapaImg').src = e.media;
+    document.getElementById('evtCapaPreview').style.display = '';
+  }
+  document.getElementById('evtFormTitle').textContent = 'Editar evento';
+  document.getElementById('btnSalvarEvento').textContent = 'Atualizar evento';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deletarEvento(id, origem) {
+  if (!confirm('Excluir este evento?')) return;
+  let resp = await fetch('/api/eventos/' + id, { method: 'DELETE', headers: authHeaders() });
+  if (resp.status === 409) {
+    const d = await resp.json();
+    if (d.detail && d.detail.error === 'evento_de_planilha') {
+      if (!confirm(d.detail.message + '\n\nConfirma excluir e descolar?')) return;
+      resp = await fetch('/api/eventos/' + id + '?confirmar_descolar=true', { method: 'DELETE', headers: authHeaders() });
+    }
+  }
+  if (resp.ok || resp.status === 204) loadEventos();
+  else alert('Erro ao excluir: ' + (await resp.text()));
+}
+
+function limparFormEvento() {
+  editingEventoId = null;
+  evtCapaUrl = null;
+  ['evtNome', 'evtDescricao', 'evtLocal', 'evtDataInicio', 'evtDataFinal', 'evtHora', 'evtValor', 'evtLink']
+    .forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('evtCapaPreview').style.display = 'none';
+  document.getElementById('evtFormTitle').textContent = 'Novo evento';
+  document.getElementById('btnSalvarEvento').textContent = 'Salvar evento';
+}
+
+function removerCapa() {
+  evtCapaUrl = null;
+  document.getElementById('evtCapaPreview').style.display = 'none';
+}
+
+document.getElementById('evtCapaDropzone').addEventListener('click',
+  () => document.getElementById('evtCapaInput').click());
+
+document.getElementById('evtCapaInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const resp = await fetch('/api/eventos/upload-capa', { method: 'POST', headers: authHeaders(), body: fd });
+  if (!resp.ok) return alert('Upload falhou');
+  const data = await resp.json();
+  evtCapaUrl = data.media;
+  document.getElementById('evtCapaImg').src = data.media;
+  document.getElementById('evtCapaPreview').style.display = '';
+});
+</script>
+</body>
+</html>

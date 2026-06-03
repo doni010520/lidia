@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disparos — LidIA</title>
+<link rel="stylesheet" href="/static/shared.css">
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h1>Lid<span class="accent">IA</span></h1>
+    <p class="subtitle">Paróquia Anglicana Espírito Santo</p>
+    <input type="text" id="loginUser" placeholder="Usuário" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="Senha" autocomplete="current-password">
+    <button class="btn-login" onclick="doLogin()">Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+</div>
+
+<header class="header" id="mainHeader" style="display:none;">
+  <div class="header-left">
+    <h1>Lid<span class="accent">IA</span> <span style="color:var(--text-muted);font-weight:400;font-size:14px;">PAES</span></h1>
+    <nav class="header-tabs">
+      <a class="tab-btn" href="/" data-tab="home">Início</a>
+      <a class="tab-btn" href="/disparos">Disparos</a>
+      <a class="tab-btn" href="/eventos">Eventos</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="user-name" id="userName"></span>
+    <button class="btn-logout" onclick="doLogout()">Sair</button>
+  </div>
+</header>
+
+<section class="section-wrap" id="disparosSection" style="display:none;">
+  <div class="card">
+    <h2>Novo disparo</h2>
+    <div class="upload-dropzone" id="uploadDropzone">
+      <div style="font-size:48px;margin-bottom:12px;color:var(--accent);">&#128206;</div>
+      <p>Arraste um arquivo aqui ou <span style="color:var(--accent);font-weight:500;">clique para selecionar</span></p>
+      <span class="upload-hint">Imagem, PDF ou Vídeo (max 16MB)</span>
+      <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xlsx,video/mp4" hidden>
+    </div>
+    <div class="upload-preview" id="uploadPreview" style="display:none;">
+      <div class="preview-thumb" id="previewThumb"></div>
+      <div class="preview-info">
+        <span class="preview-name" id="previewName"></span>
+        <span class="preview-size" id="previewSize"></span>
+        <button class="btn-remove" onclick="removeFile()">Remover</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Legenda / mensagem</label>
+      <textarea id="legendaInput" rows="4" placeholder="Digite a mensagem que acompanha o arquivo..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Para quem enviar</label>
+      <select id="filtroSelect">
+        <option value="">Todos os contatos</option>
+        <option value="membro">Apenas membros</option>
+        <option value="visitante">Apenas visitantes</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <button class="btn btn-primary" onclick="enviarAgora()" id="btnEnviarAgora">Enviar agora</button>
+      <button class="btn btn-secondary" onclick="toggleAgendar()">Agendar</button>
+    </div>
+    <div class="agendar-fields" id="agendarFields" style="display:none;">
+      <div class="form-row">
+        <div class="form-group"><label>Data</label><input type="date" id="agendarData"></div>
+        <div class="form-group"><label>Hora</label><input type="time" id="agendarHora"></div>
+      </div>
+      <button class="btn btn-primary" onclick="enviarAgendado()">Confirmar agendamento</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Histórico de disparos</h2>
+    <table class="data-table">
+      <thead><tr><th>Data</th><th>Arquivo</th><th>Legenda</th><th>Status</th><th>Progresso</th><th>Ações</th></tr></thead>
+      <tbody id="disparosBody"></tbody>
+    </table>
+    <div class="empty-msg" id="disparosEmpty" style="display:none;">Nenhum disparo encontrado.</div>
+  </div>
+</section>
+
+<script src="/static/shared.js"></script>
+<script>
+window.onAuthReady = function () {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('mainHeader').style.display = '';
+  document.getElementById('disparosSection').style.display = '';
+  const userEl = document.getElementById('userName');
+  if (userEl) userEl.textContent = sessionStorage.getItem('lidia_user') || '';
+  loadDisparos();
+};
+
+let selectedFile = null;
+const dz = document.getElementById('uploadDropzone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', () => { if (fi.files[0]) handleFile(fi.files[0]); });
+
+function handleFile(f) {
+  if (f.size > 16 * 1024 * 1024) { alert('Arquivo maior que 16MB'); return; }
+  selectedFile = f;
+  dz.style.display = 'none';
+  document.getElementById('uploadPreview').style.display = 'flex';
+  document.getElementById('previewName').textContent = f.name;
+  document.getElementById('previewSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' MB';
+  const thumb = document.getElementById('previewThumb');
+  thumb.innerHTML = f.type.startsWith('image/')
+    ? '<img src="' + URL.createObjectURL(f) + '">'
+    : '<span style="font-size:32px;color:var(--text-muted)">' + (f.type.includes('pdf') ? '📄' : '🎥') + '</span>';
+}
+
+function removeFile() {
+  selectedFile = null;
+  fi.value = '';
+  dz.style.display = '';
+  document.getElementById('uploadPreview').style.display = 'none';
+}
+
+async function uploadToServer(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch('/api/disparos/upload', { method: 'POST', headers: authHeaders(), body: fd });
+  if (!r.ok) throw new Error('Upload falhou');
+  return r.json();
+}
+
+async function enviarAgora() {
+  if (!selectedFile) return alert('Selecione um arquivo.');
+  const legenda = document.getElementById('legendaInput').value.trim();
+  if (!legenda) return alert('Digite uma legenda.');
+  const filtro = document.getElementById('filtroSelect').value || null;
+  try {
+    const cnt = await (await fetch('/api/disparos/contatos-count' + (filtro ? '?status=' + filtro : ''), { headers: authHeaders() })).json();
+    if (!confirm('Disparar para ~' + cnt.count + ' contatos?')) return;
+    document.getElementById('btnEnviarAgora').disabled = true;
+    const meta = await uploadToServer(selectedFile);
+    const r = await fetch('/api/disparos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        arquivo_url: meta.arquivo_url, arquivo_tipo: meta.arquivo_tipo, arquivo_nome: meta.arquivo_nome,
+        legenda, enviar_agora: true, filtro_status: filtro,
+      }),
+    });
+    if (r.status === 409) return alert('Já existe um disparo em andamento.');
+    if (!r.ok) return alert('Erro: ' + (await r.text()));
+    alert('Disparo iniciado!');
+    removeFile();
+    document.getElementById('legendaInput').value = '';
+    loadDisparos();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    document.getElementById('btnEnviarAgora').disabled = false;
+  }
+}
+
+function toggleAgendar() {
+  const f = document.getElementById('agendarFields');
+  f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+
+async function enviarAgendado() {
+  if (!selectedFile) return alert('Selecione um arquivo.');
+  const legenda = document.getElementById('legendaInput').value.trim();
+  if (!legenda) return alert('Digite uma legenda.');
+  const data = document.getElementById('agendarData').value;
+  const hora = document.getElementById('agendarHora').value;
+  if (!data || !hora) return alert('Informe data e hora.');
+  const filtro = document.getElementById('filtroSelect').value || null;
+  try {
+    const meta = await uploadToServer(selectedFile);
+    const r = await fetch('/api/disparos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        arquivo_url: meta.arquivo_url, arquivo_tipo: meta.arquivo_tipo, arquivo_nome: meta.arquivo_nome,
+        legenda, enviar_agora: false,
+        agendado_para: new Date(data + 'T' + hora).toISOString(),
+        filtro_status: filtro,
+      }),
+    });
+    if (r.status === 409) return alert('Já existe um disparo em andamento.');
+    if (!r.ok) return alert('Erro: ' + (await r.text()));
+    alert('Disparo agendado!');
+    removeFile();
+    document.getElementById('legendaInput').value = '';
+    document.getElementById('agendarFields').style.display = 'none';
+    loadDisparos();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function loadDisparos() {
+  try {
+    const r = await fetch('/api/disparos', { headers: authHeaders() });
+    if (r.status === 401) { doLogout(); return; }
+    const data = await r.json();
+    const body = document.getElementById('disparosBody');
+    const empty = document.getElementById('disparosEmpty');
+    if (!data.length) { body.innerHTML = ''; empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    body.innerHTML = data.map((d) => {
+      const dt = new Date(d.created_at).toLocaleString('pt-BR');
+      const pct = d.total ? Math.round(d.enviados / d.total * 100) : 0;
+      const cc = ['agendado', 'enviando'].includes(d.status);
+      const s = d.status === 'enviando';
+      return '<tr><td>' + dt + '</td><td>' + (d.arquivo_nome || d.arquivo_tipo) + '</td>'
+        + '<td><span class="legenda-truncated" title="' + (d.legenda || '').replace(/"/g, '&quot;') + '">'
+        + (d.legenda || '').slice(0, 50) + '</span></td>'
+        + '<td><span class="status-badge ' + d.status + '">' + d.status + '</span></td>'
+        + '<td><div class="progress-bar-bg"><div class="progress-bar-fill' + (s ? ' sending' : '') + '" style="width:' + pct + '%"></div></div>'
+        + '<small>' + d.enviados + '/' + d.total + ' (' + d.falhas + ' falhas)</small></td>'
+        + '<td>' + (cc ? '<button class="btn-remove" onclick="cancelarDisparo(\'' + d.id + '\')">Cancelar</button>' : '') + '</td></tr>';
+    }).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function cancelarDisparo(id) {
+  if (!confirm('Cancelar este disparo?')) return;
+  await fetch('/api/disparos/' + id + '/cancelar', { method: 'PATCH', headers: authHeaders() });
+  loadDisparos();
+}
+
+setInterval(() => {
+  if (document.getElementById('disparosSection').style.display !== 'none' && sessionStorage.getItem('lidia_token')) {
+    loadDisparos();
+  }
+}, 10000);
+</script>
+</body>
+</html>

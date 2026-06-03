@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
@@ -205,8 +206,20 @@ def create_app() -> FastAPI:
     app.include_router(eventos_router)
     app.include_router(debug_router)
 
-    # Servir estáticos DEPOIS dos routers (API tem prioridade)
-    app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
+    # Páginas dedicadas (servidas antes do mount estático)
+    @app.get("/disparos", include_in_schema=False)
+    @app.get("/disparos/", include_in_schema=False)
+    async def _page_disparos() -> FileResponse:
+        return FileResponse("app/static/disparos.html")
+
+    @app.get("/eventos", include_in_schema=False)
+    @app.get("/eventos/", include_in_schema=False)
+    async def _page_eventos() -> FileResponse:
+        return FileResponse("app/static/eventos.html")
+
+    # Servir estáticos DEPOIS dos routers (API e páginas têm prioridade)
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    app.mount("/", StaticFiles(directory="app/static", html=True), name="root")
 
     return app
 
