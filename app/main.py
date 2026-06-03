@@ -69,6 +69,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     init_services(buffer=buffer, uaz=uaz, process_cb=_process_buffered)
 
+    # ── Seed do admin do painel (se a tabela estiver vazia) ──
+    try:
+        from sqlalchemy import text as _text
+        from app.db import async_session_factory
+        from app.services.auth_service import hash_password
+        async with async_session_factory() as _db:
+            r = await _db.execute(_text("SELECT COUNT(*) FROM usuarios_painel"))
+            if r.scalar() == 0:
+                if settings.painel_default_admin_user and settings.painel_default_admin_pass:
+                    h = hash_password(settings.painel_default_admin_pass)
+                    await _db.execute(_text(
+                        "INSERT INTO usuarios_painel (username, senha_hash, nome, ativo) "
+                        "VALUES (:u, :h, :n, true)"
+                    ), {"u": settings.painel_default_admin_user, "h": h, "n": "Admin"})
+                    await _db.commit()
+                    logger.info(f"Admin do painel criado: {settings.painel_default_admin_user}")
+                else:
+                    logger.warning("usuarios_painel vazia; PAINEL_DEFAULT_ADMIN_USER/PASS não setados")
+    except Exception:
+        logger.exception("Falha ao criar admin do painel")
+
     # ── uazapi chatbot settings (handoff nativo) ──
     if settings.uaz_base_url and settings.uaz_token:
         try:
