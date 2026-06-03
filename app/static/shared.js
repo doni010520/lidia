@@ -52,15 +52,30 @@ function defaultAuthReady() {
 
 window.onAuthReady = window.onAuthReady || defaultAuthReady;
 
-// Setup automático: se tem token, pula login.
-document.addEventListener('DOMContentLoaded', () => {
-  if (isAuthed()) {
-    onAuthReady();
+// AUTO-LOGIN DEV — REMOVER ANTES DE PRODUÇÃO.
+async function _autoLoginDev() {
+  if (isAuthed()) return true;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'jE7eVjKE1YJ10Xu6Oyrx' }),
+    });
+    if (!r.ok) return false;
+    const d = await r.json();
+    sessionStorage.setItem('lidia_token', d.access_token);
+    sessionStorage.setItem('lidia_user', d.username);
+    return true;
+  } catch (e) {
+    return false;
   }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await _autoLoginDev();
+  if (isAuthed()) onAuthReady();
   const passEl = document.getElementById('loginPass');
-  if (passEl) {
-    passEl.addEventListener('keyup', (e) => { if (e.key === 'Enter') doLogin(); });
-  }
+  if (passEl) passEl.addEventListener('keyup', (e) => { if (e.key === 'Enter') doLogin(); });
 });
 
 // Marca tab ativa no header com base no path.
