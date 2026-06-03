@@ -1,11 +1,11 @@
 :root {
-  /* Paleta Twilight Vestry — todo o hue locked em 270° (mesmo do logo PAES).
-     Hierarquia por luminosidade, não por mudança de tom. */
-  --bg-primary:      #150A22;   /* page floor — quase preto, mas com calor */
-  --bg-secondary:    #1F1430;   /* header / painéis — mesmo tom do login overlay */
-  --bg-card:         #2B1F44;   /* cards e linhas de tabela */
-  --bg-card-hover:   #392C56;   /* lift sutil no hover */
-  --border:          #463A65;   /* divisória presente mas nunca dura */
+  /* Paleta Twilight Vestry — hue 278° (violeta quente, lado magenta).
+     Hierarquia por luminosidade, sem header em "strip" separado. */
+  --bg-primary:      #1A0E2A;   /* page floor — fundo único pra tudo (header + body) */
+  --bg-secondary:    #261A3D;   /* cards e painéis elevados */
+  --bg-card:         #311F52;   /* surfaces ainda mais elevadas */
+  --bg-card-hover:   #3C2962;   /* lift sutil no hover */
+  --border:          #4A3674;   /* divisória presente mas nunca dura */
 
   /* Texto warm-tinted, mais confortável em fundo violeta que cinza neutro */
   --text-primary:    #ECE6FA;
@@ -48,7 +48,7 @@ a { color:inherit; text-decoration:none; }
 .accent { color:var(--accent); }
 
 /* HEADER */
-.header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--bg-secondary); border-bottom:1px solid var(--border); }
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--bg-primary); border-bottom:1px solid var(--border); }
 .header-left { display:flex; align-items:center; gap:14px; }
 .header-left h1 { font-size:18px; font-weight:500; }
 .header-tabs { display:flex; gap:3px; background:var(--bg-primary); border-radius:8px; padding:3px; }
