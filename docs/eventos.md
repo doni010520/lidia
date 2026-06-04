@@ -204,7 +204,92 @@ Página standalone em `app/static/eventos.html`. Características:
 
 ---
 
-## 8. Resumo das decisões de design
+## 8. Tratamento de eventos passados (estratégia Liriel)
+
+Eventos que já aconteceram ainda têm valor — alguém pode perguntar
+*"quando foi o último retiro?"* ou *"teve Cursilho esse ano?"*. Mas eles
+**não podem poluir a agenda corrente** nem aparecer espontaneamente
+quando alguém pergunta *"tem evento essa semana?"*.
+
+A LidIA adota o mesmo modelo da Liriel (`liriel-agent/app/services/events_service.py`):
+
+### 8.1 Soft-delete via `is_active`
+
+- Coluna `is_active boolean DEFAULT true` em `eventos_paes`
+  *(migration pendente — 013)*.
+- "Deletar" pelo painel ou pelo `eventos_Lidia` tool vira
+  `UPDATE is_active = false`. Nunca `DELETE FROM`.
+- Eventos com `is_active = false` **somem das duas listas** (futura e
+  histórica). Continuam no banco pra auditoria mas não são lidos por
+  nenhum consumidor.
+
+### 8.2 Duas listas, sempre filtradas
+
+| Função | Janela | Pra quê |
+|---|---|---|
+| `list_future_events(days_ahead=60)` | `data_inicio >= hoje AND data_inicio <= hoje+60d` | Agenda dos próximos 60 dias |
+| `list_recent_past_editions(months_back=18, limit=15)` | `data_inicio < hoje AND data_inicio >= hoje-18m`, `DISTINCT ON (nome)` | Última edição de cada nome único, máx 15 |
+
+A função de passado tem o pulo do gato: `DISTINCT ON (nome)`. Se a PAES
+tem 5 Cursilhos Masculinos passados, devolve só a edição mais recente.
+Limpo.
+
+### 8.3 Injeção dupla no system prompt
+
+Em vez de a LidIA depender da tool `buscar_evento` ser chamada, o
+contexto é **sempre injetado** no system prompt a cada conversa:
+
+```
+<CONTEXTO_EVENTOS>
+{events_context}          ← futuros, formato bullet "- Nome: DD/MM, hora, local"
+</CONTEXTO_EVENTOS>
+
+<EVENTOS_PASSADOS>
+Últimas edições de eventos que já aconteceram (use APENAS quando a
+pessoa perguntar sobre uma edição passada — "quando foi o último retiro?",
+"quando teve a última conferência?". NÃO mencione espontaneamente):
+{past_events_context}     ← passados, formato "- Nome: última edição em DD/MM/YYYY"
+</EVENTOS_PASSADOS>
+```
+
+A regra "NÃO mencione espontaneamente" é literal no prompt — o LLM
+aprende a só puxar passado quando a pergunta é retrospectiva.
+
+### 8.4 Tool `buscar_evento` ajustada
+
+Continua existindo pra busca por filtros específicos (data, nome
+aproximado), mas:
+
+- Default: filtra `data_inicio >= hoje AND is_active = true`.
+- Param novo `incluir_passados: bool = false` — quando `true`, a tool
+  chama `list_recent_past_editions` em vez do SELECT padrão.
+- O LLM seta `incluir_passados=true` automaticamente quando detecta
+  intenção retrospectiva ("foi", "aconteceu", "última vez").
+
+### 8.5 Busca semântica (`pgvector`)
+
+Como já temos pgvector na LidIA pra RAG, vai ser reusado:
+
+- Coluna `embedding vector(1536)` em `eventos_paes` (migration 013).
+- Embedding gerado a partir de `nome + descricao` no INSERT/UPDATE.
+- `search_events(query)` faz híbrido: ordena por `embedding <=> :query_emb`
+  com threshold `> 0.25`, fallback `ILIKE` se semântica não retornar.
+- Resolve fuzzy match — "retiro dos jovem" → "Retiro de Jovens",
+  "aquele acampamento" → match pelo embedding.
+
+### 8.6 Resumo do contrato de comportamento
+
+| Pergunta do usuário | O que a LidIA usa |
+|---|---|
+| "tem evento essa semana?" | `events_context` (futuros) |
+| "que dia tem Cursilho?" | `events_context` (filtrado por nome no LLM) |
+| "quando foi o último retiro?" | `past_events_context` |
+| "ainda dá pra me inscrever no Happening?" | `events_context` (futuros — se passou, ela responde "já aconteceu, a próxima edição ainda não tem data") |
+| "tem evento amanhã?" | `events_context` filtrado pela data |
+
+---
+
+## 9. Resumo das decisões de design
 
 | Decisão | Por quê |
 |---|---|
@@ -214,10 +299,15 @@ Página standalone em `app/static/eventos.html`. Características:
 | `origem` em check constraint | Garante que UI/tools saibam exatamente de onde veio |
 | 409 ao editar/deletar `sheets` sem confirmar | Evita que o usuário do painel sobrescreva mudanças vindas da planilha sem perceber |
 | Worker que gera cultos dominicais | Eles são fixos e previsíveis — não faz sentido digitar |
+| Soft-delete via `is_active` | Eventos cancelados somem da agenda mas continuam pra auditoria |
+| Contexto injetado no prompt (não só via tool) | LidIA responde sobre agenda mesmo sem o LLM lembrar de chamar tool |
+| `DISTINCT ON (nome)` no histórico | Evita repetir 5 edições do mesmo evento — só a última |
+| Regra "NÃO mencione espontaneamente" no prompt | Passados ficam disponíveis mas só puxados em pergunta retrospectiva |
+| Embeddings em `eventos_paes` | Match fuzzy de nome aproximado ("retiro dos jovem") |
 
 ---
 
-## 9. Métricas atuais (snapshot)
+## 10. Métricas atuais (snapshot)
 
 - **Total de eventos cadastrados:** ~224
 - **Por origem (estimativa):**
@@ -229,7 +319,7 @@ Página standalone em `app/static/eventos.html`. Características:
 
 ---
 
-## 10. Para onde isso vai (Diacon)
+## 11. Para onde isso vai (Diacon)
 
 > Quando a migração Diacon entrar, `eventos_paes` é **aposentada**.
 > Diacon vira fonte única de eventos. Sheets/gerador/painel local somem.
