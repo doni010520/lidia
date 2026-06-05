@@ -26,6 +26,12 @@ TOOLS_ALLOWED: list[str] = [
     "encaminhar_video_louvor",
     "notificar_time_interno",
     "resposta_oracao",
+    # ── Diacon (Fase 1A) ──
+    "oracao_do_dia",
+    "pedido_oracao",
+    "link_foto_perfil",
+    "qr_celula",
+    "celulas_proximas",
 ]
 tools_allowed: list[dict] = get_tools(TOOLS_ALLOWED)
 

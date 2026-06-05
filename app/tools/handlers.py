@@ -24,15 +24,20 @@ from app.tools.tool_modules import (
     buscar_evento,
     cadastrar_aniversario,
     cadastrar_contato,
+    celulas_proximas,
     encaminhar_video_louvor,
     eventos_lidia,
     excluir_usuario,
     informacoes_lidia,
+    link_foto_perfil,
     notificar_time_interno,
     novos_convertidos,
+    oracao_do_dia,
     paes_download_arquivos,
     paes_listar_arquivos,
+    pedido_oracao,
     plano_de_leitura,
+    qr_celula,
     resposta_oracao,
     treinamento_lidia,
 )
@@ -55,6 +60,12 @@ _HANDLERS: dict[str, Any] = {
     "eventos_Lidia": eventos_lidia,
     "informacoes_Lidia": informacoes_lidia,
     "treinamento_LidIA": treinamento_lidia,
+    # ── Diacon (Fase 1A) ──
+    "oracao_do_dia": oracao_do_dia,
+    "pedido_oracao": pedido_oracao,
+    "link_foto_perfil": link_foto_perfil,
+    "qr_celula": qr_celula,
+    "celulas_proximas": celulas_proximas,
 }
 
 

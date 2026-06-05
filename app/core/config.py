@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     n8n_google_token: str = ""
     n8n_google_timeout_seconds: int = 30
 
+    # ── Diacon API ──
+    diacon_base_url: str = ""
+    diacon_token: str = ""
+    diacon_timeout_seconds: int = 30
+
     @property
     def admin_phones_list(self) -> list[str]:
         if not self.admin_phones:

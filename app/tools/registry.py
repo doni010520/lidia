@@ -333,6 +333,122 @@ TREINAMENTO_LIDIA: dict[str, Any] = {
     },
 }
 
+# ── Tools Diacon (Fase 1A) ──
+
+ORACAO_DO_DIA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "oracao_do_dia",
+        "description": (
+            "Envia o link + card do MOTIVO DE ORAÇÃO DO DIA da igreja (oração CORPORATIVA, "
+            "em UNIDADE com a igreja). Use SOMENTE quando a pessoa pede pra orar JUNTO com "
+            "a igreja pelo tema do dia: 'qual a oração de hoje?', 'quero orar com vocês', "
+            "'me manda o motivo de hoje', 'tem motivo de oração?'. "
+            "NÃO use pra pedido pessoal — pra isso use pedido_oracao."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone do destinatário"},
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+PEDIDO_ORACAO: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "pedido_oracao",
+        "description": (
+            "Registra um PEDIDO PESSOAL de oração na fila pastoral (Céus Abertos). "
+            "Use quando a pessoa quer que ALGUÉM ore POR ELA ou por alguém querido: "
+            "'preciso de oração', 'orem por mim', 'minha mãe está doente', "
+            "'estou passando por X, ora por mim'. "
+            "NÃO use pra oração corporativa do dia — pra isso use oracao_do_dia."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pedido": {
+                    "type": "string",
+                    "description": "Descrição do pedido (mínimo 2 chars, máx 2000)",
+                },
+                "nome": {"type": "string", "description": "Nome do solicitante"},
+                "telefone": {"type": "string", "description": "Telefone do solicitante"},
+            },
+            "required": ["pedido"],
+        },
+    },
+}
+
+LINK_FOTO_PERFIL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "link_foto_perfil",
+        "description": (
+            "Envia um link autenticado (uso único, 30 min) pra membro adicionar "
+            "ou atualizar a foto do perfil dele. Use quando a pessoa pede: "
+            "'quero atualizar minha foto', 'como mando minha foto?', 'minha foto'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone do membro"},
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+QR_CELULA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "qr_celula",
+        "description": (
+            "Envia o PDF do QR Code de presença de uma célula. SOMENTE para líderes "
+            "ou líderes em treinamento. Use quando líder pede: 'quero o QR da minha "
+            "célula', 'me manda o QR', 'preciso imprimir o QR'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone do líder"},
+                "group_id": {
+                    "type": "string",
+                    "description": "ID da célula (só se lidera mais de uma)",
+                },
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+CELULAS_PROXIMAS: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "celulas_proximas",
+        "description": (
+            "Lista células públicas mais próximas de uma localização (GPS). "
+            "Use quando a pessoa quer encontrar uma célula perto: 'tem célula perto "
+            "de mim?', 'qual a célula mais próxima daqui?'. Precisa de lat/lng."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lat": {"type": "number", "description": "Latitude"},
+                "lng": {"type": "number", "description": "Longitude"},
+                "limit": {
+                    "type": "integer",
+                    "description": "Máximo de resultados (1-20, padrão 5)",
+                },
+            },
+            "required": ["lat", "lng"],
+        },
+    },
+}
+
+
 # ── Mapa completo ──
 
 ALL_TOOLS: dict[str, dict[str, Any]] = {
@@ -352,6 +468,12 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "eventos_Lidia": EVENTOS_LIDIA,
     "informacoes_Lidia": INFORMACOES_LIDIA,
     "treinamento_LidIA": TREINAMENTO_LIDIA,
+    # ── Diacon (Fase 1A) ──
+    "oracao_do_dia": ORACAO_DO_DIA,
+    "pedido_oracao": PEDIDO_ORACAO,
+    "link_foto_perfil": LINK_FOTO_PERFIL,
+    "qr_celula": QR_CELULA,
+    "celulas_proximas": CELULAS_PROXIMAS,
 }
 
 
