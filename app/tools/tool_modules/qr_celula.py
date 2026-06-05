@@ -1,6 +1,10 @@
-"""Tool: qr_celula — envia o PDF do QR de presença da célula ao líder.
+"""Tool: qr_celula — envia o PDF do QR de presença direto pelo WhatsApp.
 
-Restrito: só funciona se o telefone for de líder (ou líder em treinamento).
+Fluxo:
+1. Diacon devolve PDF bytes (GET /cells/qr → application/pdf)
+2. uazapi recebe direto via base64 (sem passar por storage intermediário)
+
+Restrito: só funciona se o telefone for líder (ou líder em treinamento).
 Se a pessoa lidera mais de uma célula, devolve a lista pra escolher.
 """
 from __future__ import annotations
@@ -44,30 +48,24 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
         lines.append("\nMe responde com o nome da célula que quer o QR.")
         return "\n".join(lines)
 
-    # Sucesso → envia PDF via uazapi
     if not pdf_bytes:
         return "Erro: PDF do QR retornou vazio."
 
+    # Envio direto via base64 (sem upload em storage intermediário)
+    uaz = get_uaz_client()
     try:
-        # Upload pro Drive PAES via proxy n8n (reusa fluxo de disparos)
-        from app.services import drive_client
-
-        file_id = drive_client.upload_bytes(
-            content=pdf_bytes,
-            filename="qr-celula.pdf",
-            mimetype="application/pdf",
-        )
-        url = drive_client.get_public_url(file_id)
-
-        uaz = get_uaz_client()
-        await uaz.send_media(
+        await uaz.send_media_bytes(
             target_phone,
-            url,
+            pdf_bytes,
+            mimetype="application/pdf",
             type="document",
             doc_name="qr-celula.pdf",
-            text="Aqui está o QR de presença da sua célula 📄. Imprima e cole na sala — ele é fixo, vale sempre.",
+            text=(
+                "Aqui está o QR de presença da sua célula 📄. "
+                "Imprima e cole na sala — ele é fixo, vale sempre."
+            ),
         )
         return "QR enviado ao líder."
     except Exception:
-        logger.exception("Falha ao enviar QR PDF")
-        return "PDF gerado mas não consegui enviar pelo WhatsApp."
+        logger.exception("Falha ao enviar QR PDF via uazapi (base64)")
+        return "Gerei o PDF mas o WhatsApp recusou o envio. Tenta de novo em alguns segundos."

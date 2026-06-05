@@ -72,6 +72,8 @@ class UAZClient:
         read_chat: bool = True,
         delay: int = 0,
     ) -> dict:
+        """Envia mídia. `file` pode ser uma URL (http/https) OU uma data URL
+        em base64 (`data:application/pdf;base64,JVBERi0xLjQ...`)."""
         payload: dict[str, Any] = {
             "number": number,
             "file": file,
@@ -88,6 +90,38 @@ class UAZClient:
         if mentions:
             payload["mentions"] = mentions
         return await self._post("/send/media", payload)
+
+    async def send_media_bytes(
+        self,
+        number: str,
+        content: bytes,
+        mimetype: str,
+        type: Literal["image", "document", "video", "audio", "ptt", "sticker"],
+        *,
+        text: str | None = None,
+        doc_name: str | None = None,
+        reply_id: str | None = None,
+        read_chat: bool = True,
+        delay: int = 0,
+    ) -> dict:
+        """Atalho: encoda bytes em data URL base64 e chama send_media.
+
+        Evita ter que subir o arquivo em algum storage público antes —
+        a uazapi recebe o conteúdo embutido no JSON.
+        """
+        import base64
+        b64 = base64.b64encode(content).decode("ascii")
+        data_url = f"data:{mimetype};base64,{b64}"
+        return await self.send_media(
+            number,
+            data_url,
+            type,
+            text=text,
+            doc_name=doc_name,
+            reply_id=reply_id,
+            read_chat=read_chat,
+            delay=delay,
+        )
 
     async def send_presence(
         self,
