@@ -1,88 +1,93 @@
-"""Tool: cadastrar_contato — cadastra/atualiza contato no sistema."""
+"""Tool: cadastrar_contato — cadastra ou atualiza membro no Diacon.
+
+Fase 3: Diacon = fonte de verdade. Mantemos um write-behind local em
+`contacts` (atualizado se existir) só pra debounce e logs imediatos —
+não é fonte de verdade.
+"""
 from __future__ import annotations
 
 from datetime import date
 
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Contact
+from app.services import diacon_client
 
 
-async def execute(
-    args: dict,
-    phone: str,
-    db: AsyncSession,
-) -> str:
-    """Cadastra ou atualiza contato.
+def _map_status_to_diacon(status: str) -> str:
+    """Nossos status ('membro', 'visitante') para Diacon ('active', 'visitor')."""
+    s = (status or "").lower().strip()
+    if s in ("membro", "member", "active"):
+        return "active"
+    if s in ("visitante", "visitor"):
+        return "visitor"
+    if s in ("inativo", "inactive"):
+        return "inactive"
+    if s in ("pendente", "pending"):
+        return "pending"
+    return "active"
 
-    UPSERT por telefone. Seta cadastro_completo=True.
-    """
-    nome = args.get("nome", "")
-    telefone = args.get("telefone", phone)  # fallback para o phone da conversa
+
+async def execute(args: dict, phone: str, db: AsyncSession) -> str:
+    nome = (args.get("nome") or "").strip()
+    telefone = args.get("telefone") or phone
     email = args.get("email")
-    status = args.get("status", "visitante")
+    status_raw = args.get("status") or "visitante"
     aniversario_str = args.get("aniversario")
 
     if not nome:
         return "Erro: 'nome' é obrigatório para cadastro."
 
-    # Parse aniversário
-    aniversario: date | None = None
+    if not diacon_client.is_enabled():
+        return "Erro: integração Diacon não configurada."
+
+    # Validar aniversário
+    birth_date = None
     if aniversario_str:
         try:
-            aniversario = date.fromisoformat(aniversario_str)
-        except ValueError:
-            logger.warning(f"Data de aniversário inválida: {aniversario_str}")
+            birth_date = str(date.fromisoformat(str(aniversario_str)[:10]))
+        except Exception:
+            return f"Erro: data de aniversário '{aniversario_str}' inválida (use YYYY-MM-DD)."
 
-    # Buscar contato existente
-    result = await db.execute(
-        select(Contact).where(Contact.telefone == telefone)
-    )
-    contact = result.scalar_one_or_none()
+    diacon_status = _map_status_to_diacon(status_raw)
 
-    if contact:
-        # Update
-        contact.nome = nome
-        contact.full_name = nome
-        if email:
-            contact.email = email
-        if status:
-            contact.status = status
-        if aniversario:
-            contact.aniversario = aniversario
-        contact.cadastro_completo = True
-        await db.flush()
-        action = "atualizado"
-    else:
-        # Insert
-        contact = Contact(
-            telefone=telefone,
-            nome=nome,
+    # ── Tentar criar no Diacon (idempotente por phone) ──
+    try:
+        resp = await diacon_client.member_create(
             full_name=nome,
+            phone=telefone,
             email=email,
-            status=status,
-            aniversario=aniversario,
-            cadastro_completo=True,
+            birth_date=birth_date,
+            status=diacon_status,
         )
-        db.add(contact)
+    except diacon_client.DiaconError as e:
+        logger.warning(f"cadastrar_contato: Diacon {e.code} {e}")
+        return f"Não consegui cadastrar agora ({e.code or 'erro'}). Tenta de novo em alguns segundos."
+
+    member = resp.get("member") or {}
+    created = resp.get("created", False)
+
+    # ── Write-behind no Postgres local (apenas pra debounce/logs) ──
+    try:
+        await db.execute(
+            update(Contact)
+            .where(Contact.telefone == telefone)
+            .values(
+                nome=member.get("first_name") or nome.split()[0] if nome else None,
+                full_name=member.get("full_name") or nome,
+                email=email,
+                status=status_raw,
+                aniversario=date.fromisoformat(birth_date) if birth_date else None,
+                cadastro_completo=True,
+            )
+        )
         await db.commit()
-        await db.refresh(contact)
-        action = "criado"
+    except Exception:
+        logger.exception("cadastrar_contato: write-behind local falhou (não crítico)")
 
-    log = logger.bind(phone=telefone)
-    log.info(f"Contato {action}: {nome} ({status})")
-
-    parts = [f"Contato {action} com sucesso."]
-    parts.append(f"Nome: {nome}")
-    parts.append(f"Telefone: {telefone}")
-    if email:
-        parts.append(f"Email: {email}")
-    if status:
-        parts.append(f"Status: {status}")
-    if aniversario:
-        parts.append(f"Aniversário: {aniversario.strftime('%d/%m/%Y')}")
-    parts.append("Cadastro completo: sim")
-
-    return "\n".join(parts)
+    first = member.get("first_name") or nome.split()[0] if nome else ""
+    if created:
+        return f"Cadastro feito com sucesso, {first}! 🎉 Seja bem-vindo(a) à família PAES."
+    return f"Tudo certo, {first}! Seu cadastro está atualizado."

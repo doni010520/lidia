@@ -147,6 +147,29 @@ async def test_tool(token: str = Query(...), name: str = Query(...),
             }
 
 
+@router.post("/migrate-diacon")
+async def trigger_diacon_migration(token: str = Query(...), dry_run: bool = Query(True)):
+    """Dispara migrate_contacts_to_diacon via subprocess (temporário)."""
+    _check(token)
+    import asyncio
+    import sys
+    args = ["-u", "-m", "scripts.migrate_contacts_to_diacon"]
+    if dry_run:
+        args.append("--dry-run")
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd="/app",
+    )
+    stdout, _ = await proc.communicate()
+    output = stdout.decode("utf-8", errors="replace")
+    return {
+        "return_code": proc.returncode,
+        "output_tail": output[-5000:],
+    }
+
+
 @router.get("/sql")
 async def debug_sql(token: str = Query(...), q: str = Query(...)):
     """Executa SELECT/COUNT temporário. Bloqueia DDL/DML por segurança."""
