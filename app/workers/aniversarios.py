@@ -40,6 +40,29 @@ Sugestao: enviar bencao pessoal.
 """
 
 async def _fetch_aniversariantes() -> list[dict]:
+    """Fase 4: Diacon é a fonte. GET /birthdays?range=today.
+
+    Fallback: Postgres local (caso Diacon esteja fora).
+    """
+    from app.services import diacon_client
+
+    if diacon_client.is_enabled():
+        try:
+            data = await diacon_client.birthdays("today")
+            return [
+                {
+                    "id": b.get("id"),
+                    "telefone": (b.get("phone") or "").lstrip("+"),
+                    "nome": b.get("first_name") or b.get("full_name"),
+                    "email": None,
+                }
+                for b in (data.get("birthdays") or [])
+                if b.get("allow_contact", True) and b.get("phone")
+            ]
+        except Exception:
+            logger.exception("aniversarios: Diacon falhou, fallback local")
+
+    # Fallback local
     async with async_session_factory() as db:
         result = await db.execute(text("""
             SELECT id, telefone, COALESCE(full_name, nome) AS nome, email
