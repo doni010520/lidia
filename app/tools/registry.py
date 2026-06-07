@@ -429,21 +429,26 @@ CELULAS_PROXIMAS: dict[str, Any] = {
     "function": {
         "name": "celulas_proximas",
         "description": (
-            "Lista células públicas mais próximas de uma localização (GPS). "
+            "Lista células públicas mais próximas de um bairro ou endereço. "
             "Use quando a pessoa quer encontrar uma célula perto: 'tem célula perto "
-            "de mim?', 'qual a célula mais próxima daqui?'. Precisa de lat/lng."
+            "de mim?', 'qual a célula no bairro X?', 'célula em Boa Viagem'. "
+            "Passe o bairro/endereço no campo 'endereco'."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "lat": {"type": "number", "description": "Latitude"},
-                "lng": {"type": "number", "description": "Longitude"},
+                "endereco": {
+                    "type": "string",
+                    "description": "Bairro, região ou endereço (ex: 'Boa Viagem', 'Espinheiro', 'Imbiribeira')",
+                },
+                "lat": {"type": "number", "description": "Latitude (opcional, se disponível)"},
+                "lng": {"type": "number", "description": "Longitude (opcional, se disponível)"},
                 "limit": {
                     "type": "integer",
                     "description": "Máximo de resultados (1-20, padrão 5)",
                 },
             },
-            "required": ["lat", "lng"],
+            "required": ["endereco"],
         },
     },
 }
