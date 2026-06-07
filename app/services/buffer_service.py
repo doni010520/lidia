@@ -70,6 +70,8 @@ class BufferService:
             "mimetype": msg.mimetype,
             "message_id": msg.message_id,
             "name": msg.name,
+            "latitude": msg.latitude,
+            "longitude": msg.longitude,
         })
         await self.redis.rpush(buf_key, entry)
         await self.redis.expire(buf_key, self.buffer_seconds + 30)
@@ -127,6 +129,12 @@ class BufferService:
 
         aggregated = "\n".join(texts)
 
+        # Localização: pega a última entry que trouxe lat/lng
+        last_loc = None
+        for entry in entries:
+            if entry.get("latitude") is not None and entry.get("longitude") is not None:
+                last_loc = entry
+
         last_msg: IncomingMessage | None = None
         if last_media:
             last_msg = IncomingMessage(
@@ -138,14 +146,18 @@ class BufferService:
                 media_key=last_media.get("media_key"),
                 mimetype=last_media.get("mimetype"),
                 message_id=last_media.get("message_id"),
+                latitude=last_loc["latitude"] if last_loc else None,
+                longitude=last_loc["longitude"] if last_loc else None,
             )
-        elif aggregated:
+        elif aggregated or last_loc:
             first = entries[0]
             last_msg = IncomingMessage(
                 phone=phone,
                 name=first.get("name"),
-                text=aggregated,
+                text=aggregated if aggregated else None,
                 message_id=entries[-1].get("message_id"),
+                latitude=last_loc["latitude"] if last_loc else None,
+                longitude=last_loc["longitude"] if last_loc else None,
             )
 
         return aggregated, last_msg
