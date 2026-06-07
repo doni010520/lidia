@@ -429,10 +429,10 @@ CELULAS_PROXIMAS: dict[str, Any] = {
     "function": {
         "name": "celulas_proximas",
         "description": (
-            "Lista células públicas mais próximas de um bairro ou endereço. "
-            "Use quando a pessoa quer encontrar uma célula perto: 'tem célula perto "
-            "de mim?', 'qual a célula no bairro X?', 'célula em Boa Viagem'. "
-            "Passe o bairro/endereço no campo 'endereco'."
+            "Lista células públicas mais próximas. Aceita bairro/endereço (campo 'endereco') "
+            "OU coordenadas (campos 'lat' e 'lng'). Use quando a pessoa quer encontrar uma célula "
+            "perto: 'tem célula perto de mim?', 'qual a célula no bairro X?'. "
+            "Se o usuário enviou localização ([LOCALIZAÇÃO] lat=X, lng=Y), passe lat e lng."
         ),
         "parameters": {
             "type": "object",

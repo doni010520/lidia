@@ -90,6 +90,8 @@ class IncomingMessage(BaseModel):
     is_group: bool = False
     from_me: bool = False
     is_revoke: bool = False
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 _MEDIA_MAP: dict[str, str] = {
@@ -109,6 +111,9 @@ _MEDIA_MAP: dict[str, str] = {
     "Sticker": "sticker",
     "Ptt": "audio",
 }
+
+# Tipos de mensagem de localização (v1 e v2)
+_LOCATION_TYPES = {"locationMessage", "Location", "liveLocationMessage", "LiveLocation"}
 
 
 def parse_webhook(payload: UAZWebhookPayload) -> IncomingMessage | None:
@@ -132,12 +137,14 @@ def parse_webhook(payload: UAZWebhookPayload) -> IncomingMessage | None:
     if not phone:
         return None
 
-    # text + mídia
+    # text + mídia + localização
     text: str | None = None
     media_url: str | None = None
     media_type: str | None = None
     media_key: str | None = None
     mimetype: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
     if msg:
         text = msg.text
@@ -146,8 +153,20 @@ def parse_webhook(payload: UAZWebhookPayload) -> IncomingMessage | None:
         # content pode ser:
         #   - string  (v2 texto): "Oi Lidia"
         #   - dict    (v1 mídia): {"URL":"...","mediaKey":"...","mimetype":"..."}
+        #   - dict    (localização): {"degreesLatitude":..., "degreesLongitude":...}
         c = msg.content
-        if isinstance(c, dict):
+
+        # ── Localização ──
+        if msg_type in _LOCATION_TYPES:
+            if isinstance(c, dict):
+                latitude = c.get("degreesLatitude") or c.get("latitude")
+                longitude = c.get("degreesLongitude") or c.get("longitude")
+                try:
+                    latitude = float(latitude) if latitude is not None else None
+                    longitude = float(longitude) if longitude is not None else None
+                except (TypeError, ValueError):
+                    latitude, longitude = None, None
+        elif isinstance(c, dict):
             media_url = c.get("URL") or c.get("url")
             media_key = c.get("mediaKey")
             mimetype = c.get("mimetype")
@@ -203,4 +222,6 @@ def parse_webhook(payload: UAZWebhookPayload) -> IncomingMessage | None:
         is_group=is_group,
         from_me=from_me,
         is_revoke=payload.notification == "REVOKE",
+        latitude=latitude,
+        longitude=longitude,
     )

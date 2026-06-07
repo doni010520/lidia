@@ -262,6 +262,15 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
             else:
                 user_text = "[SISTEMA] Usuário enviou vídeo, mas não foi possível processar.\n" + user_text
 
+    # ── 2b. Localização → texto contextual para o LLM ──
+    if msg.latitude is not None and msg.longitude is not None:
+        loc_prefix = (
+            f"[LOCALIZAÇÃO] O usuário compartilhou sua localização: "
+            f"lat={msg.latitude}, lng={msg.longitude}"
+        )
+        user_text = loc_prefix + ("\n" + user_text if user_text else "")
+        log.info(f"Localização recebida: {msg.latitude}, {msg.longitude}")
+
     if not user_text.strip():
         log.debug("Mensagem sem texto, ignorando")
         return
