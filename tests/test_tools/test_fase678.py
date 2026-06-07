@@ -200,16 +200,19 @@ class TestAnalyticsService:
 # ── Registry final ──
 
 class TestRegistryFinal:
-    def test_all_16_tools_registered(self):
+    def test_all_tools_registered(self):
         from app.tools.registry import ALL_TOOLS
-        assert len(ALL_TOOLS) == 16
+        # 16 originais + 5 Diacon (Fase 1A)
+        assert len(ALL_TOOLS) == 21
 
-    def test_lidia_has_13_atendimento_tools(self):
+    def test_lidia_atendimento_tools(self):
         from app.agents.lidia import TOOLS_ALLOWED, tools_allowed
-        assert len(TOOLS_ALLOWED) == 13
-        assert len(tools_allowed) == 13
+        # 12 de atendimento + 5 Diacon (resposta_oracao migrou p/ pedido_oracao)
+        assert len(TOOLS_ALLOWED) == 17
+        assert len(tools_allowed) == 17
         assert "notificar_time_interno" in TOOLS_ALLOWED
-        assert "resposta_oracao" in TOOLS_ALLOWED
+        assert "pedido_oracao" in TOOLS_ALLOWED
+        assert "oracao_do_dia" in TOOLS_ALLOWED
 
     def test_lidia_has_3_admin_tools(self):
         from app.agents.lidia import ADMIN_TOOLS, admin_tools_allowed

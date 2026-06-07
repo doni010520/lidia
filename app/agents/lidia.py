@@ -25,7 +25,6 @@ TOOLS_ALLOWED: list[str] = [
     "PAES_download_arquivos",
     "encaminhar_video_louvor",
     "notificar_time_interno",
-    "resposta_oracao",
     # ── Diacon (Fase 1A) ──
     "oracao_do_dia",
     "pedido_oracao",

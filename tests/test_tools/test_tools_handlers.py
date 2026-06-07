@@ -12,7 +12,7 @@ from app.tools.registry import ALL_TOOLS, get_tools
 class TestRegistry:
     def test_all_tools_registered(self):
         from app.tools.registry import ALL_TOOLS
-        assert len(ALL_TOOLS) == 16
+        assert len(ALL_TOOLS) == 21
 
     def test_get_tools_filters_by_name(self):
         result = get_tools(["buscar_documentos", "cadastrar_contato"])
@@ -315,15 +315,17 @@ class TestExcluirUsuario:
 
 
 class TestAgentsToolsWiring:
-    def test_lidia_has_11_tools(self):
+    def test_lidia_atendimento_tools(self):
         from app.agents.lidia import TOOLS_ALLOWED, tools_allowed
-        assert len(TOOLS_ALLOWED) == 13
-        assert len(tools_allowed) == 13
+        assert len(TOOLS_ALLOWED) == 17
+        assert len(tools_allowed) == 17
         assert "buscar_documentos" in TOOLS_ALLOWED
         assert "excluir_usuario" in TOOLS_ALLOWED
         assert "buscar_evento" in TOOLS_ALLOWED
         assert "plano_de_leitura" in TOOLS_ALLOWED
         assert "PAES_listar_arquivos" in TOOLS_ALLOWED
+        assert "link_foto_perfil" in TOOLS_ALLOWED
+        assert "celulas_proximas" in TOOLS_ALLOWED
 
     def test_lidia_cadastro_has_1_tool(self):
         from app.agents.lidia_cadastro import TOOLS_ALLOWED, tools_allowed

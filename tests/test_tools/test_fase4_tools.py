@@ -249,14 +249,14 @@ class TestSheetsSync:
 # ── registry atualizado ──
 
 class TestRegistryPhase4:
-    def test_all_11_tools_registered(self):
+    def test_all_tools_registered(self):
         from app.tools.registry import ALL_TOOLS
-        assert len(ALL_TOOLS) == 16
+        assert len(ALL_TOOLS) == 21
 
-    def test_lidia_has_11_tools(self):
+    def test_lidia_atendimento_tools(self):
         from app.agents.lidia import TOOLS_ALLOWED, tools_allowed
-        assert len(TOOLS_ALLOWED) == 13
-        assert len(tools_allowed) == 13
+        assert len(TOOLS_ALLOWED) == 17
+        assert len(tools_allowed) == 17
         assert "buscar_evento" in TOOLS_ALLOWED
         assert "plano_de_leitura" in TOOLS_ALLOWED
         assert "novos_convertidos" in TOOLS_ALLOWED

@@ -5,7 +5,6 @@ from app.schemas.webhook import (
     ChatInfo,
     IncomingMessage,
     KeyInfo,
-    MessageContent,
     MessageInfo,
     UAZWebhookPayload,
     parse_webhook,
@@ -47,7 +46,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="imageMessage",
                 messageid="MSG002",
-                content=MessageContent(
+                content=dict(
                     URL="https://example.com/image.jpg",
                     mediaKey="abc123",
                     mimetype="image/jpeg",
@@ -69,7 +68,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="audioMessage",
                 messageid="MSG003",
-                content=MessageContent(
+                content=dict(
                     URL="https://example.com/audio.ogg",
                     mediaKey="def456",
                     mimetype="audio/ogg; codecs=opus",
@@ -88,7 +87,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="documentMessage",
                 messageid="MSG004",
-                content=MessageContent(
+                content=dict(
                     URL="https://example.com/doc.pdf",
                     mimetype="application/pdf",
                     fileName="relatorio.pdf",
@@ -107,7 +106,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="videoMessage",
                 messageid="MSG005",
-                content=MessageContent(
+                content=dict(
                     URL="https://example.com/video.mp4",
                     mimetype="video/mp4",
                 ),
@@ -124,7 +123,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="stickerMessage",
                 messageid="MSG006",
-                content=MessageContent(URL="https://example.com/sticker.webp"),
+                content=dict(URL="https://example.com/sticker.webp"),
             ),
         )
         msg = parse_webhook(payload)
@@ -157,13 +156,18 @@ class TestParseWebhook:
         assert msg is not None
         assert msg.is_revoke is True
 
-    def test_no_key_returns_none(self):
+    def test_no_key_still_extracts_phone_from_chat(self):
+        # uazapi v2: telefone vem de chat.wa_chatid mesmo sem key
         payload = _make_payload(key=None)
         msg = parse_webhook(payload)
-        assert msg is None
+        assert msg is not None
+        assert msg.phone == "5581999999999"
 
-    def test_no_remote_jid_returns_none(self):
+    def test_no_phone_anywhere_returns_none(self):
+        # Sem chat, sem message.chatid, sem key.remoteJid → None
         payload = _make_payload(
+            chat=None,
+            message=MessageInfo(text="oi", messageType="conversation", messageid="X"),
             key=KeyInfo(fromMe=False, remoteJid=None, id="X"),
         )
         msg = parse_webhook(payload)
@@ -171,6 +175,7 @@ class TestParseWebhook:
 
     def test_phone_extraction_strips_suffix(self):
         payload = _make_payload(
+            chat=ChatInfo(wa_chatid="5581998765432@s.whatsapp.net", wa_name="X"),
             key=KeyInfo(fromMe=False, remoteJid="5581998765432@s.whatsapp.net", id="X"),
         )
         msg = parse_webhook(payload)
@@ -184,7 +189,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="pttMessage",
                 messageid="MSG008",
-                content=MessageContent(URL="https://example.com/ptt.ogg"),
+                content=dict(URL="https://example.com/ptt.ogg"),
             ),
         )
         msg = parse_webhook(payload)
@@ -198,7 +203,7 @@ class TestParseWebhook:
                 text=None,
                 messageType="documentWithCaptionMessage",
                 messageid="MSG009",
-                content=MessageContent(
+                content=dict(
                     URL="https://example.com/doc.pdf",
                     mimetype="application/pdf",
                     caption="Segue o documento",
@@ -224,8 +229,9 @@ class TestParseWebhook:
         assert msg.name == "Maria"
 
     def test_jid_without_suffix(self):
-        """JID que é apenas o número sem @."""
+        """JID que é apenas o número sem @ (em chat.wa_chatid)."""
         payload = _make_payload(
+            chat=ChatInfo(wa_chatid="5581999888777", wa_name="X"),
             key=KeyInfo(fromMe=False, remoteJid="5581999888777", id="MSG011"),
         )
         msg = parse_webhook(payload)
