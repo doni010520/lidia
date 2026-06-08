@@ -281,6 +281,26 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     hint = await rag.retrieve_hint(user_text, db)
 
     # ── 4. Escolher agente ──
+    # Se cadastro_completo está False, verifica na Diacon antes de rotear pro cadastro.
+    # Membros já existentes na Diacon não devem passar pelo fluxo de cadastro.
+    if not contact.cadastro_completo:
+        from app.services import diacon_client
+        if diacon_client.is_enabled():
+            try:
+                lookup = await diacon_client.member_lookup(msg.phone)
+                if lookup.get("found"):
+                    # Já é membro na Diacon → pular cadastro
+                    contact.cadastro_completo = True
+                    member = lookup.get("member", {})
+                    if not contact.nome and member.get("first_name"):
+                        contact.nome = member["first_name"]
+                    if not contact.full_name and member.get("full_name"):
+                        contact.full_name = member["full_name"]
+                    await db.flush()
+                    log.info("Membro encontrado na Diacon, pulando cadastro")
+            except Exception:
+                log.warning("Falha ao consultar Diacon, prosseguindo com cadastro local")
+
     if not contact.cadastro_completo:
         agent_module = lidia_cadastro
         agent_type = "cadastro"
