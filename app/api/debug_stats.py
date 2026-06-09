@@ -190,6 +190,25 @@ async def debug_sql(token: str = Query(...), q: str = Query(...)):
             return {"error": f"{type(e).__name__}: {str(e)[:300]}"}
 
 
+@router.post("/trigger-worker")
+async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
+    """Dispara um worker manualmente. Workers: aniversarios, boas_vindas."""
+    _check(token)
+    try:
+        if worker == "aniversarios":
+            from app.workers.aniversarios import check_aniversariantes
+            result = await check_aniversariantes()
+        elif worker == "boas_vindas":
+            from app.workers.boas_vindas_convertidos import disparar_boas_vindas
+            result = await disparar_boas_vindas()
+        else:
+            return {"ok": False, "error": f"Worker desconhecido: {worker}"}
+        return {"ok": True, "result": result}
+    except Exception as e:
+        import traceback
+        return {"ok": False, "error": str(e), "traceback": traceback.format_exc()[:2500]}
+
+
 @router.get("/logs")
 async def logs(token: str = Query(...), level: str = Query(""), grep: str = Query(""), limit: int = Query(200)):
     _check(token)
