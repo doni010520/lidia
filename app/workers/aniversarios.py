@@ -30,12 +30,13 @@ Voce prepara relatorio diario de aniversariantes para os pastores.
 Lista:
 {lista}
 
-Gere mensagem formatada:
-**Relatorio de Aniversariantes - [data]**
+Gere mensagem formatada EXATAMENTE assim (copie os dados acima sem alterar numeros nem links):
+*Relatorio de Aniversariantes - [data]*
 Paz do Senhor!
-Hoje temos N aniversariantes:
-1. Nome - telefone
-...
+Hoje temos N aniversariante(s):
+1. Nome - Telefone: (XX) XXXXX-XXXX
+   wa.me/XXXXXXXXXXX
+
 Sugestao: enviar bencao pessoal.
 """
 
@@ -91,13 +92,38 @@ async def _gerar_mensagem_individual(nome: str, client: openai.AsyncOpenAI) -> s
     )
     return (resp.choices[0].message.content or "").strip()
 
+def _format_phone(raw: str) -> tuple[str, str]:
+    """Retorna (telefone_local, link_wame) a partir do número bruto.
+
+    Exemplos:
+        '5581999998888' → ('(81) 99999-8888', 'wa.me/5581999998888')
+        '81999998888'   → ('(81) 99999-8888', 'wa.me/5581999998888')
+    """
+    digits = raw.lstrip("+").strip()
+    # Garante o 55 pro link wa.me
+    full = digits if digits.startswith("55") else f"55{digits}"
+    # Remove o 55 pro display local
+    local = digits[2:] if digits.startswith("55") else digits
+    # Formata (XX) XXXXX-XXXX se tiver 11 dígitos
+    if len(local) == 11:
+        display = f"({local[:2]}) {local[2:7]}-{local[7:]}"
+    elif len(local) == 10:
+        display = f"({local[:2]}) {local[2:6]}-{local[6:]}"
+    else:
+        display = local
+    return display, f"wa.me/{full}"
+
+
 async def _gerar_relatorio_pastores(aniversariantes: list[dict], client: openai.AsyncOpenAI) -> str:
     if not aniversariantes:
         return ""
-    lista = "\n\n".join(
-        f"{i+1}. {a['nome']}\n   - Telefone: {a['telefone']}\n   - Email: {a.get('email') or 'nao informado'}"
-        for i, a in enumerate(aniversariantes)
-    )
+    items = []
+    for i, a in enumerate(aniversariantes):
+        display, wame = _format_phone(a.get("telefone") or "")
+        items.append(
+            f"{i+1}. {a['nome']}\n   - Telefone: {display}\n   - {wame}"
+        )
+    lista = "\n\n".join(items)
     data_br = datetime.now(_SP_TZ).strftime("%d de %B de %Y")
     prompt = _PROMPT_RELATORIO.format(data_atual_br=data_br, lista=lista)
     resp = await client.chat.completions.create(
