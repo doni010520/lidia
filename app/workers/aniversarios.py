@@ -23,15 +23,46 @@ Regras:
 - Use o nome do aniversariante.
 """
 
-_PROMPT_SUGESTAO = """Você é LidIA, assistente virtual da PAES.
-Gere uma mensagem CURTA e calorosa de parabéns para {nome}.
+_PROMPT_RELATORIO = """Hoje é: {data_atual_br}
+Nome do pastor que vai receber: {nome_pastor}
 
-Regras:
-- Tom acolhedor, sem exagero. Emojis com moderação.
-- Mencione bênção/oração.
-- Máximo 4 linhas.
-- Use o nome do aniversariante.
-- A mensagem será encaminhada por um pastor, então escreva como se fosse do pastor (não da LidIA).
+Você prepara o relatório diário de aniversariantes para os pastores da PAES.
+
+Lista de aniversariantes de hoje:
+{lista}
+
+Gere UMA mensagem completa no seguinte formato (respeitando a estrutura abaixo):
+
+*📅 Relatório de Aniversariantes - [data]*
+
+Paz do Senhor, [nome do pastor]! 🙏
+
+Hoje temos *N aniversariante(s)* em nossa comunidade:
+
+1. *Nome* - Telefone
+   wa.me/LINK
+2. ...
+
+*Sugestão:*
+Considere enviar uma mensagem personalizada de parabéns via WhatsApp para fortalecer o vínculo pastoral com cada irmão(ã).
+
+---
+
+*Sugestões de mensagens personalizadas para envio via WhatsApp:*
+
+1. Para Nome:
+"Mensagem calorosa e pastoral de parabéns com 2-3 linhas, mencionando bênção e oração. Emojis com moderação."
+
+2. Para Nome:
+"..."
+
+Que Deus abençoe o dia de cada um deles! 🎂
+
+REGRAS:
+- Copie os telefones e links wa.me EXATAMENTE como estão na lista (não altere números).
+- Cada sugestão de mensagem deve ser entre aspas, personalizada com o nome, tom pastoral e acolhedor.
+- Máximo 3 linhas por sugestão.
+- Use emojis com moderação.
 """
 
 async def _fetch_aniversariantes() -> list[dict]:
@@ -108,53 +139,36 @@ def _format_phone(raw: str) -> tuple[str, str]:
     return display, f"wa.me/{full}"
 
 
-async def _gerar_sugestao(nome: str, client: openai.AsyncOpenAI) -> str:
-    """Gera mensagem sugerida de parabéns que o pastor pode encaminhar."""
-    resp = await client.chat.completions.create(
-        model=settings.openai_model, temperature=0.7, max_tokens=300,
-        messages=[
-            {"role": "system", "content": _PROMPT_SUGESTAO.format(nome=nome)},
-            {"role": "user", "content": f"Gere a mensagem de parabéns para {nome}."},
-        ],
-    )
-    return (resp.choices[0].message.content or "").strip()
-
-
-async def _gerar_relatorio_pastores(aniversariantes: list[dict], client: openai.AsyncOpenAI) -> str:
-    """Constrói o relatório de aniversariantes com mensagem sugerida por pessoa."""
+async def _gerar_relatorio_pastor(
+    nome_pastor: str,
+    aniversariantes: list[dict],
+    client: openai.AsyncOpenAI,
+) -> str:
+    """Gera relatório personalizado para um pastor, com sugestões de mensagem."""
     if not aniversariantes:
         return ""
 
-    data_br = datetime.now(_SP_TZ).strftime("%d de %B de %Y")
-    n = len(aniversariantes)
-    header = (
-        f"*Relatório de Aniversariantes — {data_br}*\n"
-        f"Paz do Senhor!\n"
-        f"Hoje temos {n} aniversariante{'s' if n > 1 else ''}:"
-    )
-
-    blocos = []
+    items = []
     for i, a in enumerate(aniversariantes):
         nome = a.get("nome") or "amigo(a)"
         display, wame = _format_phone(a.get("telefone") or "")
+        items.append(f"{i+1}. {nome} - +55 {display}\n   {wame}")
+    lista = "\n".join(items)
 
-        # Gera sugestão de mensagem via LLM
-        try:
-            sugestao = await _gerar_sugestao(nome, client)
-        except Exception:
-            logger.warning(f"Falha ao gerar sugestão para {nome}")
-            sugestao = f"Feliz aniversário, {nome}! Que Deus te abençoe neste novo ano de vida. 🙏"
-
-        blocos.append(
-            f"{i+1}. *{nome}*\n"
-            f"   Telefone: {display}\n"
-            f"   {wame}\n"
-            f"\n"
-            f"   ✉️ _Sugestão de mensagem:_\n"
-            f"   {sugestao}"
-        )
-
-    return header + "\n\n" + "\n\n".join(blocos)
+    data_br = datetime.now(_SP_TZ).strftime("%d de %B de %Y")
+    prompt = _PROMPT_RELATORIO.format(
+        data_atual_br=data_br,
+        nome_pastor=nome_pastor or "pastor(a)",
+        lista=lista,
+    )
+    resp = await client.chat.completions.create(
+        model=settings.openai_model, temperature=0.5, max_tokens=1500,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Gere o relatório completo com as sugestões de mensagem."},
+        ],
+    )
+    return (resp.choices[0].message.content or "").strip()
 
 async def check_aniversariantes() -> dict[str, int]:
     aniversariantes = await _fetch_aniversariantes()
@@ -175,15 +189,15 @@ async def check_aniversariantes() -> dict[str, int]:
             logger.exception(f"Falha ao parabenizar {a['telefone']}")
     pastores = await _fetch_pastores()
     pastores_avisados = 0
-    if pastores:
-        relatorio = await _gerar_relatorio_pastores(aniversariantes, client)
-        if relatorio:
-            for p in pastores:
-                try:
-                    msg = f"Paz, {p['nome'] or 'pastor(a)'}!\n\n{relatorio}"
-                    await uaz.send_text(p["telefone"], msg, delay=3000)
-                    pastores_avisados += 1
-                    await asyncio.sleep(3)
-                except Exception:
-                    logger.exception(f"Falha ao avisar pastor {p['telefone']}")
+    for p in pastores:
+        try:
+            relatorio = await _gerar_relatorio_pastor(
+                p["nome"] or "pastor(a)", aniversariantes, client,
+            )
+            if relatorio:
+                await uaz.send_text(p["telefone"], relatorio, delay=3000)
+                pastores_avisados += 1
+                await asyncio.sleep(3)
+        except Exception:
+            logger.exception(f"Falha ao avisar pastor {p['telefone']}")
     return {"aniversariantes": len(aniversariantes), "mensagens_enviadas": enviadas, "pastores_avisados": pastores_avisados}
