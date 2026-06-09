@@ -23,21 +23,15 @@ Regras:
 - Use o nome do aniversariante.
 """
 
-_PROMPT_RELATORIO = """Hoje e: {data_atual_br}
+_PROMPT_SUGESTAO = """Você é LidIA, assistente virtual da PAES.
+Gere uma mensagem CURTA e calorosa de parabéns para {nome}.
 
-Voce prepara relatorio diario de aniversariantes para os pastores.
-
-Lista:
-{lista}
-
-Gere mensagem formatada EXATAMENTE assim (copie os dados acima sem alterar numeros nem links):
-*Relatorio de Aniversariantes - [data]*
-Paz do Senhor!
-Hoje temos N aniversariante(s):
-1. Nome - Telefone: (XX) XXXXX-XXXX
-   wa.me/XXXXXXXXXXX
-
-Sugestao: enviar bencao pessoal.
+Regras:
+- Tom acolhedor, sem exagero. Emojis com moderação.
+- Mencione bênção/oração.
+- Máximo 4 linhas.
+- Use o nome do aniversariante.
+- A mensagem será encaminhada por um pastor, então escreva como se fosse do pastor (não da LidIA).
 """
 
 async def _fetch_aniversariantes() -> list[dict]:
@@ -114,26 +108,53 @@ def _format_phone(raw: str) -> tuple[str, str]:
     return display, f"wa.me/{full}"
 
 
-async def _gerar_relatorio_pastores(aniversariantes: list[dict], client: openai.AsyncOpenAI) -> str:
-    if not aniversariantes:
-        return ""
-    items = []
-    for i, a in enumerate(aniversariantes):
-        display, wame = _format_phone(a.get("telefone") or "")
-        items.append(
-            f"{i+1}. {a['nome']}\n   - Telefone: {display}\n   - {wame}"
-        )
-    lista = "\n\n".join(items)
-    data_br = datetime.now(_SP_TZ).strftime("%d de %B de %Y")
-    prompt = _PROMPT_RELATORIO.format(data_atual_br=data_br, lista=lista)
+async def _gerar_sugestao(nome: str, client: openai.AsyncOpenAI) -> str:
+    """Gera mensagem sugerida de parabéns que o pastor pode encaminhar."""
     resp = await client.chat.completions.create(
-        model=settings.openai_model, temperature=0.3, max_tokens=800,
+        model=settings.openai_model, temperature=0.7, max_tokens=300,
         messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": "Gere o relatorio consolidado."},
+            {"role": "system", "content": _PROMPT_SUGESTAO.format(nome=nome)},
+            {"role": "user", "content": f"Gere a mensagem de parabéns para {nome}."},
         ],
     )
     return (resp.choices[0].message.content or "").strip()
+
+
+async def _gerar_relatorio_pastores(aniversariantes: list[dict], client: openai.AsyncOpenAI) -> str:
+    """Constrói o relatório de aniversariantes com mensagem sugerida por pessoa."""
+    if not aniversariantes:
+        return ""
+
+    data_br = datetime.now(_SP_TZ).strftime("%d de %B de %Y")
+    n = len(aniversariantes)
+    header = (
+        f"*Relatório de Aniversariantes — {data_br}*\n"
+        f"Paz do Senhor!\n"
+        f"Hoje temos {n} aniversariante{'s' if n > 1 else ''}:"
+    )
+
+    blocos = []
+    for i, a in enumerate(aniversariantes):
+        nome = a.get("nome") or "amigo(a)"
+        display, wame = _format_phone(a.get("telefone") or "")
+
+        # Gera sugestão de mensagem via LLM
+        try:
+            sugestao = await _gerar_sugestao(nome, client)
+        except Exception:
+            logger.warning(f"Falha ao gerar sugestão para {nome}")
+            sugestao = f"Feliz aniversário, {nome}! Que Deus te abençoe neste novo ano de vida. 🙏"
+
+        blocos.append(
+            f"{i+1}. *{nome}*\n"
+            f"   Telefone: {display}\n"
+            f"   {wame}\n"
+            f"\n"
+            f"   ✉️ _Sugestão de mensagem:_\n"
+            f"   {sugestao}"
+        )
+
+    return header + "\n\n" + "\n\n".join(blocos)
 
 async def check_aniversariantes() -> dict[str, int]:
     aniversariantes = await _fetch_aniversariantes()
