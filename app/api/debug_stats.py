@@ -209,6 +209,28 @@ async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
         return {"ok": False, "error": str(e), "traceback": traceback.format_exc()[:2500]}
 
 
+@router.post("/delete-knowledge")
+async def delete_knowledge(token: str = Query(...), ids: str = Query(...)):
+    """Deleta chunks de knowledge_chunks por lista de IDs (CSV). Temporário."""
+    _check(token)
+    try:
+        id_list = [int(x) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        return {"ok": False, "error": "ids inválido, use CSV de inteiros"}
+    if not id_list:
+        return {"ok": False, "error": "nenhum id informado"}
+    async with async_session_factory() as db:
+        try:
+            r = await db.execute(
+                text("DELETE FROM knowledge_chunks WHERE id = ANY(:ids)"),
+                {"ids": id_list},
+            )
+            await db.commit()
+            return {"ok": True, "deleted": r.rowcount, "ids": id_list}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+
 @router.get("/logs")
 async def logs(token: str = Query(...), level: str = Query(""), grep: str = Query(""), limit: int = Query(200)):
     _check(token)
