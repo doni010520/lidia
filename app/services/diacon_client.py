@@ -206,6 +206,15 @@ async def member_cells(phone: str) -> dict[str, Any]:
     return await _request_json("GET", "members/cells", params={"phone": phone})
 
 
+async def member_stats(phone: str) -> dict[str, Any]:
+    """GET /members/stats?phone=... — engajamento do membro.
+
+    Retorno: {ok, found, member?, stats?, text?}. `text` é a mensagem
+    pastoral já montada, pronta pra enviar.
+    """
+    return await _request_json("GET", "members/stats", params={"phone": phone})
+
+
 # ── Cells ──
 
 async def cells_near(lat: float, lng: float, *, limit: int = 5) -> dict[str, Any]:
@@ -240,6 +249,38 @@ async def cell_qr_pdf(phone: str, group_id: str | None = None) -> tuple[bytes, d
             _raise_for_status(resp, endpoint="GET cells/qr")
         if not resp.is_success:
             _raise_for_status(resp, endpoint="GET cells/qr")
+        return resp.content, None
+
+
+async def cells_summary_pdf(
+    phone: str, *, group_id: str | None = None, date: str | None = None
+) -> tuple[bytes, dict | None]:
+    """GET /cells/summary — PDF do resumo de presença de um encontro.
+
+    Devolve (pdf_bytes, None) em sucesso, ou (b"", payload_json) quando
+    precisa escolher group_id (400 com lista). Levanta DiaconError em
+    403 (não-líder) ou 404 (sem encontro com check-in).
+    """
+    if not _enabled():
+        raise DiaconError("Diacon não configurado")
+    url = f"{_base_url()}/cells/summary"
+    params: dict[str, Any] = {"phone": phone}
+    if group_id:
+        params["group_id"] = group_id
+    if date:
+        params["date"] = date
+    async with httpx.AsyncClient(timeout=settings.diacon_timeout_seconds) as client:
+        resp = await client.get(url, headers=_headers(), params=params)
+        if resp.status_code == 400 and "application/json" in resp.headers.get("content-type", ""):
+            try:
+                body = resp.json()
+            except Exception:
+                _raise_for_status(resp, endpoint="GET cells/summary")
+            if "cells" in body:
+                return b"", body
+            _raise_for_status(resp, endpoint="GET cells/summary")
+        if not resp.is_success:
+            _raise_for_status(resp, endpoint="GET cells/summary")
         return resp.content, None
 
 

@@ -31,6 +31,10 @@ TOOLS_ALLOWED: list[str] = [
     "link_foto_perfil",
     "qr_celula",
     "celulas_proximas",
+    # ── Diacon (Fase 5: stats/admin/resumo) ──
+    "minha_caminhada",
+    "panorama_igreja",
+    "resumo_celula",
 ]
 tools_allowed: list[dict] = get_tools(TOOLS_ALLOWED)
 

@@ -30,15 +30,18 @@ from app.tools.tool_modules import (
     excluir_usuario,
     informacoes_lidia,
     link_foto_perfil,
+    minha_caminhada,
     notificar_time_interno,
     novos_convertidos,
     oracao_do_dia,
     paes_download_arquivos,
     paes_listar_arquivos,
+    panorama_igreja,
     pedido_oracao,
     plano_de_leitura,
     qr_celula,
     resposta_oracao,
+    resumo_celula,
     treinamento_lidia,
 )
 
@@ -66,6 +69,9 @@ _HANDLERS: dict[str, Any] = {
     "link_foto_perfil": link_foto_perfil,
     "qr_celula": qr_celula,
     "celulas_proximas": celulas_proximas,
+    "minha_caminhada": minha_caminhada,
+    "panorama_igreja": panorama_igreja,
+    "resumo_celula": resumo_celula,
 }
 
 

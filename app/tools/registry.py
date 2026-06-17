@@ -382,6 +382,73 @@ PEDIDO_ORACAO: dict[str, Any] = {
     },
 }
 
+MINHA_CAMINHADA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "minha_caminhada",
+        "description": (
+            "Mostra o retrato de engajamento DO PRÓPRIO membro: presenças no ano, "
+            "orações registradas, sequências (streaks), 'top X%' e saúde do vínculo. "
+            "Use quando a pessoa pergunta sobre a CAMINHADA dela mesma: "
+            "'como está minha frequência?', 'quantas vezes orei?', 'minha caminhada', "
+            "'como tô indo na igreja?', 'meu engajamento'. "
+            "É sobre a PRÓPRIA pessoa — não use pra números gerais da igreja."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone do membro"},
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+PANORAMA_IGREJA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "panorama_igreja",
+        "description": (
+            "Panorama GERENCIAL da igreja (membros ativos, células, último domingo, "
+            "check-ins, eventos, frequência, saúde). RESTRITO a administradores — a "
+            "Diacon só responde se o telefone for de admin. Use quando alguém pede os "
+            "números/visão geral da igreja: 'panorama da igreja', 'quantos membros "
+            "ativos temos?', 'como estão os números', 'resumo gerencial'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone de quem pede (admin)"},
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+RESUMO_CELULA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "resumo_celula",
+        "description": (
+            "Envia o PDF do RESUMO DE PRESENÇA de um encontro da célula (quem da casa "
+            "+ visitantes + total). RESTRITO a líderes de célula. Use quando o líder "
+            "pede: 'resumo da minha célula', 'presença do encontro', 'quantos foram na "
+            "célula', 'relatório de presença da célula'. Diferente do qr_celula (que é "
+            "o QR de check-in). Aceita 'data' opcional (YYYY-MM-DD); sem ela, usa o "
+            "último encontro com presença."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone do líder"},
+                "data": {"type": "string", "description": "Data do encontro (YYYY-MM-DD), opcional"},
+                "group_id": {"type": "string", "description": "ID da célula, se lidera mais de uma"},
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
 LINK_FOTO_PERFIL: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -479,6 +546,9 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "link_foto_perfil": LINK_FOTO_PERFIL,
     "qr_celula": QR_CELULA,
     "celulas_proximas": CELULAS_PROXIMAS,
+    "minha_caminhada": MINHA_CAMINHADA,
+    "panorama_igreja": PANORAMA_IGREJA,
+    "resumo_celula": RESUMO_CELULA,
 }
 
 
