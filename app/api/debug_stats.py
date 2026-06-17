@@ -231,6 +231,27 @@ async def delete_knowledge(token: str = Query(...), ids: str = Query(...)):
             return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
 
 
+@router.post("/set-team-phones")
+async def set_team_phones(token: str = Query(...), equipe: str = Query(...), phones: str = Query(...)):
+    """Define telefones_responsaveis de uma equipe (CSV). Temporário."""
+    _check(token)
+    phone_list = [p.strip() for p in phones.split(",") if p.strip()]
+    async with async_session_factory() as db:
+        try:
+            r = await db.execute(
+                text(
+                    "UPDATE equipes_responsaveis SET telefones_responsaveis = :ph "
+                    "WHERE equipe ILIKE :eq RETURNING equipe, telefones_responsaveis"
+                ),
+                {"ph": phone_list, "eq": f"%{equipe}%"},
+            )
+            rows = [dict(row._mapping) for row in r.fetchall()]
+            await db.commit()
+            return {"ok": True, "updated": rows}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+
 @router.get("/logs")
 async def logs(token: str = Query(...), level: str = Query(""), grep: str = Query(""), limit: int = Query(200)):
     _check(token)
