@@ -231,6 +231,34 @@ async def delete_knowledge(token: str = Query(...), ids: str = Query(...)):
             return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
 
 
+@router.post("/update-knowledge")
+async def update_knowledge(token: str = Query(...), id: int = Query(...),
+                           content: str = Query(...), embed_text: str = Query("")):
+    """Atualiza content de um chunk e RE-EMBEDDA. Se embed_text vier, embedda
+    esse texto (foco semântico); senão embedda o próprio content."""
+    _check(token)
+    from app.services.rag_service import RAGService
+    rag = RAGService()
+    try:
+        emb = await rag._embed(embed_text.strip() or content)
+    except Exception as e:
+        return {"ok": False, "error": f"embed falhou: {type(e).__name__}: {str(e)[:200]}"}
+    async with async_session_factory() as db:
+        try:
+            r = await db.execute(
+                text(
+                    "UPDATE knowledge_chunks SET content = :c, "
+                    "embedding = CAST(:e AS vector) WHERE id = :id RETURNING id"
+                ),
+                {"c": content, "e": str(emb), "id": id},
+            )
+            updated = [row.id for row in r.fetchall()]
+            await db.commit()
+            return {"ok": True, "updated": updated}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+
+
 @router.post("/set-team-phones")
 async def set_team_phones(token: str = Query(...), equipe: str = Query(...), phones: str = Query(...)):
     """Define telefones_responsaveis de uma equipe (CSV). Temporário."""
