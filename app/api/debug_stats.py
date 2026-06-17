@@ -209,6 +209,23 @@ async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
         return {"ok": False, "error": str(e), "traceback": traceback.format_exc()[:2500]}
 
 
+@router.get("/rag-test")
+async def rag_test(token: str = Query(...), q: str = Query(...), k: int = Query(5)):
+    """Roda a busca RAG real numa query e retorna os chunks + scores."""
+    _check(token)
+    from app.services.rag_service import RAGService
+    rag = RAGService()
+    async with async_session_factory() as db:
+        chunks = await rag.search(q, db, top_k=k)
+    return {
+        "query": q,
+        "results": [
+            {"score": round(c.score, 3), "source": c.source, "snippet": c.content[:90]}
+            for c in chunks
+        ],
+    }
+
+
 @router.post("/delete-knowledge")
 async def delete_knowledge(token: str = Query(...), ids: str = Query(...)):
     """Deleta chunks de knowledge_chunks por lista de IDs (CSV). Temporário."""
