@@ -209,6 +209,32 @@ async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
         return {"ok": False, "error": str(e), "traceback": traceback.format_exc()[:2500]}
 
 
+@router.post("/resume-disparo")
+async def resume_disparo(token: str = Query(...), id: str = Query(...)):
+    """Retoma um disparo travado em 'enviando' (dispara run_disparo de novo).
+    Idempotente: pula contatos já enviados (disparo_log)."""
+    _check(token)
+    import asyncio
+    import uuid as _uuid
+    try:
+        did = _uuid.UUID(id)
+    except ValueError:
+        return {"ok": False, "error": "id inválido"}
+    async with async_session_factory() as db:
+        r = await db.execute(
+            text("UPDATE disparos SET status='enviando' "
+                 "WHERE id=:id AND status IN ('enviando','agendado') RETURNING id, enviados, total"),
+            {"id": str(did)},
+        )
+        row = r.first()
+        await db.commit()
+    if not row:
+        return {"ok": False, "error": "disparo não encontrado ou já finalizado/cancelado"}
+    from app.workers.disparo_runner import run_disparo
+    asyncio.create_task(run_disparo(did))
+    return {"ok": True, "resumed": id, "enviados": row.enviados, "total": row.total}
+
+
 @router.post("/migrate-disparos-contato")
 async def migrate_disparos_contato(token: str = Query(...)):
     """Aplica a migration 012 (disparo com contato). Idempotente."""
