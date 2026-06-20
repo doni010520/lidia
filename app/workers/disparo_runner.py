@@ -66,12 +66,6 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
         if not disparo or disparo.status != "enviando":
             return
 
-        if settings.disparos_business_hours_enabled and not is_business_hours():
-            logger.info(f"Disparo {disparo_id} fora de horário comercial → agendado")
-            disparo.status = "agendado"
-            await db.commit()
-            return
-
         contatos = await fetch_contatos(db, disparo)
         disparo.total = len(contatos)
         await db.commit()
@@ -119,11 +113,6 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
             d = await db.get(Disparo, disparo_id)
             if not d or d.status == "cancelado":
                 logger.info(f"Disparo {disparo_id} cancelado mid-loop")
-                return
-            if settings.disparos_business_hours_enabled and not is_business_hours():
-                logger.info(f"Disparo {disparo_id} saiu do horário comercial → agendado")
-                d.status = "agendado"
-                await db.commit()
                 return
             # Idempotência: pular se já enviado
             existing = await db.scalar(
