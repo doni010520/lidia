@@ -68,8 +68,11 @@ class Settings(BaseSettings):
     # Intervalo aleatório ENTRE pessoas (anti-ban). Default 3–5 min.
     disparos_intervalo_min_seconds: int = 180
     disparos_intervalo_max_seconds: int = 300
-    # Sem restrição de horário — LidIA dispara a qualquer hora/dia.
-    disparos_business_hours_enabled: bool = False
+    # Janela de envio (Brasília): pausa fora dela (protege a madrugada).
+    # Todos os dias, das 8h às 21h. Retoma sozinho na próxima abertura.
+    disparos_janela_inicio_hora: int = 8
+    disparos_janela_fim_hora: int = 21
+    disparos_business_hours_enabled: bool = False  # regra antiga desativada
     disparos_max_file_mb: int = 16
     disparos_drive_folder: str = ""
 

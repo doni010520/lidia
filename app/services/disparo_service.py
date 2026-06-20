@@ -1,7 +1,7 @@
 """Service layer para disparos — validações, queries, lock global."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
@@ -59,7 +59,10 @@ async def count_contatos(db: AsyncSession, status_filter: str | None = None) -> 
 
 
 def is_business_hours() -> bool:
-    """Brasília (UTC-3): Seg-Sex 7:30-18:00, Sáb 8:00-13:00, Dom fechado."""
+    """Brasília (UTC-3): Seg-Sex 7:30-18:00, Sáb 8:00-13:00, Dom fechado.
+
+    Mantido por compatibilidade — não mais usado pra gating de disparos.
+    """
     now = datetime.now(_SP_TZ)
     weekday = now.weekday()
     hour_decimal = now.hour + now.minute / 60
@@ -69,3 +72,29 @@ def is_business_hours() -> bool:
     if weekday == 5:
         return 8.0 <= hour_decimal < 13.0
     return False
+
+
+def dentro_da_janela() -> bool:
+    """True se a hora atual (Brasília) está na janela de envio permitida.
+
+    Todos os dias, entre disparos_janela_inicio_hora e disparos_janela_fim_hora.
+    Fora disso (madrugada/noite) o disparo pausa.
+    """
+    now = datetime.now(_SP_TZ)
+    return (
+        settings.disparos_janela_inicio_hora
+        <= now.hour
+        < settings.disparos_janela_fim_hora
+    )
+
+
+def proxima_abertura() -> datetime:
+    """Próximo horário (tz-aware) em que a janela de envio reabre."""
+    now = datetime.now(_SP_TZ)
+    inicio = settings.disparos_janela_inicio_hora
+    abertura = now.replace(hour=inicio, minute=0, second=0, microsecond=0)
+    if now.hour >= settings.disparos_janela_fim_hora:
+        # Já passou da janela hoje → reabre amanhã
+        abertura = abertura + timedelta(days=1)
+    # Se now.hour < inicio, 'abertura' já é hoje no futuro — ok.
+    return abertura

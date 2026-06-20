@@ -16,7 +16,11 @@ from app.core.config import settings
 from app.db import async_session_factory
 from app.models.disparos import Disparo, DisparoLog
 from app.services.deps import get_uaz_client
-from app.services.disparo_service import fetch_contatos, is_business_hours
+from app.services.disparo_service import (
+    dentro_da_janela,
+    fetch_contatos,
+    proxima_abertura,
+)
 
 
 async def run_disparo(disparo_id: uuid.UUID) -> None:
@@ -66,6 +70,15 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
         if not disparo or disparo.status != "enviando":
             return
 
+        # Fora da janela de envio → agenda pra próxima abertura
+        if not dentro_da_janela():
+            abertura = proxima_abertura()
+            disparo.status = "agendado"
+            disparo.agendado_para = abertura
+            await db.commit()
+            logger.info(f"Disparo {disparo_id} fora da janela → retoma em {abertura.isoformat()}")
+            return
+
         contatos = await fetch_contatos(db, disparo)
         disparo.total = len(contatos)
         await db.commit()
@@ -113,6 +126,14 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
             d = await db.get(Disparo, disparo_id)
             if not d or d.status == "cancelado":
                 logger.info(f"Disparo {disparo_id} cancelado mid-loop")
+                return
+            # Fora da janela (ex.: chegou 21h) → pausa e agenda retomada
+            if not dentro_da_janela():
+                abertura = proxima_abertura()
+                d.status = "agendado"
+                d.agendado_para = abertura
+                await db.commit()
+                logger.info(f"Disparo {disparo_id} pausou (janela) → retoma em {abertura.isoformat()}")
                 return
             # Idempotência: pular se já enviado
             existing = await db.scalar(
