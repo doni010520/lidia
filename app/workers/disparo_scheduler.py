@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.core.config import settings
 from app.db import async_session_factory
@@ -26,13 +26,18 @@ async def check_scheduled_disparos() -> int:
             return 0
 
         # Pega o próximo agendado
+        # Pega o próximo agendado cuja hora chegou OU um disparo imediato
+        # que pausou no horário comercial (agendado_para = NULL).
         result = await db.execute(
             select(Disparo)
             .where(
                 Disparo.status == "agendado",
-                Disparo.agendado_para <= func.now(),
+                or_(
+                    Disparo.agendado_para.is_(None),
+                    Disparo.agendado_para <= func.now(),
+                ),
             )
-            .order_by(Disparo.agendado_para.asc())
+            .order_by(Disparo.agendado_para.asc().nullsfirst())
             .limit(1)
         )
         disparo = result.scalar_one_or_none()

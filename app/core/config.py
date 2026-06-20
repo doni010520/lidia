@@ -64,7 +64,10 @@ class Settings(BaseSettings):
     sheets_sync_interval_minutes: int = 15
 
     # Disparos
-    disparos_delay_seconds: int = 3
+    disparos_delay_seconds: int = 3  # gap curto: "digitando" + texto→contato
+    # Intervalo aleatório ENTRE pessoas (anti-ban). Default 3–5 min.
+    disparos_intervalo_min_seconds: int = 180
+    disparos_intervalo_max_seconds: int = 300
     disparos_business_hours_enabled: bool = True
     disparos_max_file_mb: int = 16
     disparos_drive_folder: str = ""

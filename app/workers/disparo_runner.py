@@ -6,10 +6,11 @@ restaura no finally (mesmo em crash).
 from __future__ import annotations
 
 import asyncio
+import random
 import uuid
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.db import async_session_factory
@@ -52,110 +53,149 @@ async def run_disparo(disparo_id: uuid.UUID) -> None:
 
 
 async def _loop_envio(disparo_id: uuid.UUID) -> None:
-    """Loop principal de envio."""
+    """Loop principal de envio.
+
+    Sessão de banco CURTA por iteração (a espera entre pessoas é longa,
+    3–5 min, então não dá pra segurar uma conexão aberta o loop todo).
+    Contadores cumulativos a partir de disparo_log (retoma certo após
+    pausa de horário comercial).
+    """
+    # ── Setup: contatos + snapshot dos campos do disparo ──
     async with async_session_factory() as db:
         disparo = await db.get(Disparo, disparo_id)
         if not disparo or disparo.status != "enviando":
             return
 
-        # Verificar horário comercial
         if settings.disparos_business_hours_enabled and not is_business_hours():
             logger.info(f"Disparo {disparo_id} fora de horário comercial → agendado")
             disparo.status = "agendado"
             await db.commit()
             return
 
-        # Buscar contatos
         contatos = await fetch_contatos(db, disparo)
         disparo.total = len(contatos)
         await db.commit()
 
-        if not contatos:
-            disparo.status = "concluido"
-            await db.commit()
-            logger.info(f"Disparo {disparo_id} sem contatos elegíveis → concluído")
-            return
+        snap = {
+            "tipo": disparo.tipo,
+            "legenda": disparo.legenda,
+            "arquivo_url": disparo.arquivo_url,
+            "arquivo_tipo": disparo.arquivo_tipo,
+            "contato_nome": disparo.contato_nome,
+            "contato_telefone": disparo.contato_telefone,
+            "contato_organizacao": disparo.contato_organizacao,
+        }
 
-        uaz = get_uaz_client()
-        enviados = 0
-        falhas = 0
+    if not contatos:
+        async with async_session_factory() as db:
+            d = await db.get(Disparo, disparo_id)
+            if d:
+                d.status = "concluido"
+                await db.commit()
+        logger.info(f"Disparo {disparo_id} sem contatos elegíveis → concluído")
+        return
 
-        for contato in contatos:
-            # Refresh: cancelamento mid-loop
-            await db.refresh(disparo)
-            if disparo.status == "cancelado":
+    uaz = get_uaz_client()
+
+    # Contadores cumulativos (sobrevivem a pausas/retomadas)
+    async with async_session_factory() as db:
+        enviados = await db.scalar(
+            select(func.count(DisparoLog.id)).where(
+                DisparoLog.disparo_id == disparo_id, DisparoLog.status == "enviado"
+            )
+        ) or 0
+        falhas = await db.scalar(
+            select(func.count(DisparoLog.id)).where(
+                DisparoLog.disparo_id == disparo_id, DisparoLog.status == "falhou"
+            )
+        ) or 0
+
+    total = len(contatos)
+    for idx, contato in enumerate(contatos):
+        telefone = contato["telefone"]
+
+        # ── Checagens de estado (sessão curta) ──
+        async with async_session_factory() as db:
+            d = await db.get(Disparo, disparo_id)
+            if not d or d.status == "cancelado":
                 logger.info(f"Disparo {disparo_id} cancelado mid-loop")
                 return
-
-            # Horário comercial mid-loop
             if settings.disparos_business_hours_enabled and not is_business_hours():
-                logger.info(f"Disparo {disparo_id} saiu do horário comercial mid-loop → agendado")
-                disparo.status = "agendado"
+                logger.info(f"Disparo {disparo_id} saiu do horário comercial → agendado")
+                d.status = "agendado"
                 await db.commit()
                 return
-
             # Idempotência: pular se já enviado
             existing = await db.scalar(
                 select(DisparoLog).where(
                     DisparoLog.disparo_id == disparo_id,
-                    DisparoLog.telefone == contato["telefone"],
+                    DisparoLog.telefone == telefone,
                 )
             )
             if existing:
                 continue
 
-            # Envio
-            try:
-                if disparo.tipo == "contato":
-                    # 1) mensagem de texto  2) cartão de contato (vCard)
-                    await uaz.send_text(
-                        contato["telefone"],
-                        disparo.legenda or "",
-                        delay=settings.disparos_delay_seconds * 1000,
-                    )
-                    await asyncio.sleep(settings.disparos_delay_seconds)
-                    await uaz.send_contact(
-                        contato["telefone"],
-                        full_name=disparo.contato_nome or "",
-                        phone_number=disparo.contato_telefone or "",
-                        organization=disparo.contato_organizacao,
-                        delay=settings.disparos_delay_seconds * 1000,
-                    )
-                else:
-                    await uaz.send_media(
-                        number=contato["telefone"],
-                        file=disparo.arquivo_url,
-                        type=disparo.arquivo_tipo,
-                        text=disparo.legenda,
-                        delay=settings.disparos_delay_seconds * 1000,
-                    )
-                log_status = "enviado"
-                erro = None
-                enviados += 1
-            except Exception as e:
-                log_status = "falhou"
-                erro = str(e)[:500]
-                falhas += 1
-                logger.exception(f"Falha ao enviar para {contato['telefone']}")
+        # ── Envio (fora de qualquer sessão de banco) ──
+        try:
+            if snap["tipo"] == "contato":
+                # 1) mensagem de texto  2) cartão de contato (vCard)
+                await uaz.send_text(
+                    telefone, snap["legenda"] or "",
+                    delay=settings.disparos_delay_seconds * 1000,
+                )
+                await asyncio.sleep(settings.disparos_delay_seconds)
+                await uaz.send_contact(
+                    telefone,
+                    full_name=snap["contato_nome"] or "",
+                    phone_number=snap["contato_telefone"] or "",
+                    organization=snap["contato_organizacao"],
+                    delay=settings.disparos_delay_seconds * 1000,
+                )
+            else:
+                await uaz.send_media(
+                    number=telefone,
+                    file=snap["arquivo_url"],
+                    type=snap["arquivo_tipo"],
+                    text=snap["legenda"],
+                    delay=settings.disparos_delay_seconds * 1000,
+                )
+            log_status = "enviado"
+            erro = None
+            enviados += 1
+        except Exception as e:
+            log_status = "falhou"
+            erro = str(e)[:500]
+            falhas += 1
+            logger.exception(f"Falha ao enviar para {telefone}")
 
-            # Log
+        # ── Log + contadores (sessão curta) ──
+        async with async_session_factory() as db:
             db.add(DisparoLog(
                 disparo_id=disparo_id,
-                telefone=contato["telefone"],
+                telefone=telefone,
                 nome=contato.get("nome", ""),
                 status=log_status,
                 erro=erro,
             ))
-
-            # Atualizar contadores
-            disparo.enviados = enviados
-            disparo.falhas = falhas
+            d = await db.get(Disparo, disparo_id)
+            if d:
+                d.enviados = enviados
+                d.falhas = falhas
             await db.commit()
 
-            # Anti-spam
-            await asyncio.sleep(settings.disparos_delay_seconds)
+        # ── Intervalo aleatório entre pessoas (anti-ban), exceto após o último ──
+        if idx < total - 1:
+            intervalo = random.randint(
+                settings.disparos_intervalo_min_seconds,
+                settings.disparos_intervalo_max_seconds,
+            )
+            logger.info(f"Disparo {disparo_id}: aguardando {intervalo}s até o próximo")
+            await asyncio.sleep(intervalo)
 
-        # Finalizar
-        disparo.status = "concluido" if falhas < disparo.total else "falhou"
-        await db.commit()
-        logger.info(f"Disparo {disparo_id} concluído: {enviados} ok, {falhas} falhas")
+    # ── Finalizar ──
+    async with async_session_factory() as db:
+        d = await db.get(Disparo, disparo_id)
+        if d:
+            d.status = "concluido" if falhas < (d.total or 0) else "falhou"
+            await db.commit()
+    logger.info(f"Disparo {disparo_id} concluído: {enviados} ok, {falhas} falhas")
