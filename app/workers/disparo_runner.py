@@ -106,13 +106,29 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
 
             # Envio
             try:
-                await uaz.send_media(
-                    number=contato["telefone"],
-                    file=disparo.arquivo_url,
-                    type=disparo.arquivo_tipo,
-                    text=disparo.legenda,
-                    delay=settings.disparos_delay_seconds * 1000,
-                )
+                if disparo.tipo == "contato":
+                    # 1) mensagem de texto  2) cartão de contato (vCard)
+                    await uaz.send_text(
+                        contato["telefone"],
+                        disparo.legenda or "",
+                        delay=settings.disparos_delay_seconds * 1000,
+                    )
+                    await asyncio.sleep(settings.disparos_delay_seconds)
+                    await uaz.send_contact(
+                        contato["telefone"],
+                        full_name=disparo.contato_nome or "",
+                        phone_number=disparo.contato_telefone or "",
+                        organization=disparo.contato_organizacao,
+                        delay=settings.disparos_delay_seconds * 1000,
+                    )
+                else:
+                    await uaz.send_media(
+                        number=contato["telefone"],
+                        file=disparo.arquivo_url,
+                        type=disparo.arquivo_tipo,
+                        text=disparo.legenda,
+                        delay=settings.disparos_delay_seconds * 1000,
+                    )
                 log_status = "enviado"
                 erro = None
                 enviados += 1

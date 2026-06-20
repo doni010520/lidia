@@ -209,6 +209,32 @@ async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
         return {"ok": False, "error": str(e), "traceback": traceback.format_exc()[:2500]}
 
 
+@router.post("/migrate-disparos-contato")
+async def migrate_disparos_contato(token: str = Query(...)):
+    """Aplica a migration 012 (disparo com contato). Idempotente."""
+    _check(token)
+    stmts = [
+        "ALTER TABLE disparos ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'midia'",
+        "ALTER TABLE disparos ADD COLUMN IF NOT EXISTS contato_nome TEXT",
+        "ALTER TABLE disparos ADD COLUMN IF NOT EXISTS contato_telefone TEXT",
+        "ALTER TABLE disparos ADD COLUMN IF NOT EXISTS contato_organizacao TEXT",
+        "ALTER TABLE disparos ALTER COLUMN arquivo_url DROP NOT NULL",
+        "ALTER TABLE disparos ALTER COLUMN arquivo_tipo DROP NOT NULL",
+        "ALTER TABLE disparos DROP CONSTRAINT IF EXISTS ck_disparo_tipo",
+        "ALTER TABLE disparos ADD CONSTRAINT ck_disparo_tipo CHECK (tipo IN ('midia', 'contato'))",
+    ]
+    done, errors = [], []
+    async with async_session_factory() as db:
+        for s in stmts:
+            try:
+                await db.execute(text(s))
+                done.append(s[:60])
+            except Exception as e:
+                errors.append({"stmt": s[:60], "error": f"{type(e).__name__}: {str(e)[:160]}"})
+        await db.commit()
+    return {"ok": not errors, "applied": done, "errors": errors}
+
+
 @router.get("/rag-test")
 async def rag_test(token: str = Query(...), q: str = Query(...), k: int = Query(5)):
     """Roda a busca RAG real numa query e retorna os chunks + scores."""

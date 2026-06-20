@@ -27,10 +27,14 @@ class Disparo(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=func.gen_random_uuid()
     )
-    arquivo_url: Mapped[str] = mapped_column(Text, nullable=False)
-    arquivo_tipo: Mapped[str] = mapped_column(String(20), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), default="midia", server_default="midia")
+    arquivo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    arquivo_tipo: Mapped[str | None] = mapped_column(String(20), nullable=True)
     arquivo_nome: Mapped[str | None] = mapped_column(String(255))
     legenda: Mapped[str | None] = mapped_column(Text)
+    contato_nome: Mapped[str | None] = mapped_column(Text)
+    contato_telefone: Mapped[str | None] = mapped_column(Text)
+    contato_organizacao: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="agendado", server_default="agendado")
     agendado_para: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     total: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -43,8 +47,12 @@ class Disparo(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "arquivo_tipo IN ('image', 'document', 'video')",
+            "arquivo_tipo IS NULL OR arquivo_tipo IN ('image', 'document', 'video')",
             name="ck_disparo_arquivo_tipo",
+        ),
+        CheckConstraint(
+            "tipo IN ('midia', 'contato')",
+            name="ck_disparo_tipo",
         ),
         CheckConstraint(
             "status IN ('agendado', 'enviando', 'concluido', 'falhou', 'cancelado')",

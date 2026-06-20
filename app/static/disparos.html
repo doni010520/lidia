@@ -37,23 +37,51 @@
 <section class="section-wrap" id="disparosSection" style="display:none;">
   <div class="card">
     <h2>Novo disparo</h2>
-    <div class="upload-dropzone" id="uploadDropzone">
-      <div style="font-size:48px;margin-bottom:12px;color:var(--accent);">&#128206;</div>
-      <p>Arraste um arquivo aqui ou <span style="color:var(--accent);font-weight:500;">clique para selecionar</span></p>
-      <span class="upload-hint">Imagem, PDF ou Vídeo (max 16MB)</span>
-      <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xlsx,video/mp4" hidden>
-    </div>
-    <div class="upload-preview" id="uploadPreview" style="display:none;">
-      <div class="preview-thumb" id="previewThumb"></div>
-      <div class="preview-info">
-        <span class="preview-name" id="previewName"></span>
-        <span class="preview-size" id="previewSize"></span>
-        <button class="btn-remove" onclick="removeFile()">Remover</button>
+    <div class="form-group">
+      <label>Tipo de disparo</label>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-primary" id="tipoMidiaBtn" onclick="setTipo('midia')">📎 Mídia + legenda</button>
+        <button type="button" class="btn btn-secondary" id="tipoContatoBtn" onclick="setTipo('contato')">👤 Texto + contato</button>
       </div>
     </div>
+
+    <!-- Campos do tipo MÍDIA -->
+    <div id="midiaFields">
+      <div class="upload-dropzone" id="uploadDropzone">
+        <div style="font-size:48px;margin-bottom:12px;color:var(--accent);">&#128206;</div>
+        <p>Arraste um arquivo aqui ou <span style="color:var(--accent);font-weight:500;">clique para selecionar</span></p>
+        <span class="upload-hint">Imagem, PDF ou Vídeo (max 16MB)</span>
+        <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xlsx,video/mp4" hidden>
+      </div>
+      <div class="upload-preview" id="uploadPreview" style="display:none;">
+        <div class="preview-thumb" id="previewThumb"></div>
+        <div class="preview-info">
+          <span class="preview-name" id="previewName"></span>
+          <span class="preview-size" id="previewSize"></span>
+          <button class="btn-remove" onclick="removeFile()">Remover</button>
+        </div>
+      </div>
+    </div>
+
     <div class="form-group">
-      <label>Legenda / mensagem</label>
+      <label id="legendaLabel">Legenda / mensagem</label>
       <textarea id="legendaInput" rows="4" placeholder="Digite a mensagem que acompanha o arquivo..."></textarea>
+    </div>
+
+    <!-- Campos do tipo CONTATO -->
+    <div id="contatoFields" style="display:none;">
+      <div class="form-group">
+        <label>Nome do contato (aparece no cartão)</label>
+        <input type="text" id="contatoNome" placeholder="Ex.: Pastor João - PAES">
+      </div>
+      <div class="form-group">
+        <label>Telefone do contato</label>
+        <input type="text" id="contatoTelefone" placeholder="Ex.: 5581988887777 (vários separados por vírgula)">
+      </div>
+      <div class="form-group">
+        <label>Organização (opcional)</label>
+        <input type="text" id="contatoOrg" placeholder="Ex.: PAES Catedral">
+      </div>
     </div>
     <div class="form-group">
       <label>Para quem enviar</label>
@@ -98,6 +126,22 @@ window.onAuthReady = function () {
 };
 
 let selectedFile = null;
+let currentTipo = 'midia';
+
+function setTipo(tipo) {
+  currentTipo = tipo;
+  const isMidia = tipo === 'midia';
+  document.getElementById('midiaFields').style.display = isMidia ? '' : 'none';
+  document.getElementById('contatoFields').style.display = isMidia ? 'none' : '';
+  document.getElementById('legendaLabel').textContent = isMidia ? 'Legenda / mensagem' : 'Mensagem de texto';
+  document.getElementById('legendaInput').placeholder = isMidia
+    ? 'Digite a mensagem que acompanha o arquivo...'
+    : 'Digite a mensagem que vai antes do contato...';
+  // estilo dos botões
+  document.getElementById('tipoMidiaBtn').className = isMidia ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('tipoContatoBtn').className = isMidia ? 'btn btn-secondary' : 'btn btn-primary';
+}
+
 const dz = document.getElementById('uploadDropzone');
 const fi = document.getElementById('fileInput');
 dz.addEventListener('click', () => fi.click());
@@ -138,29 +182,55 @@ async function uploadToServer(file) {
   return r.json();
 }
 
-async function enviarAgora() {
-  if (!selectedFile) return alert('Selecione um arquivo.');
+async function montarBody(enviarAgora, agendadoParaISO) {
   const legenda = document.getElementById('legendaInput').value.trim();
-  if (!legenda) return alert('Digite uma legenda.');
+  if (!legenda) { alert('Digite a mensagem.'); return null; }
+  const filtro = document.getElementById('filtroSelect').value || null;
+  const body = { tipo: currentTipo, legenda, enviar_agora: enviarAgora, filtro_status: filtro };
+  if (agendadoParaISO) body.agendado_para = agendadoParaISO;
+
+  if (currentTipo === 'midia') {
+    if (!selectedFile) { alert('Selecione um arquivo.'); return null; }
+    const meta = await uploadToServer(selectedFile);
+    body.arquivo_url = meta.arquivo_url;
+    body.arquivo_tipo = meta.arquivo_tipo;
+    body.arquivo_nome = meta.arquivo_nome;
+  } else {
+    const nome = document.getElementById('contatoNome').value.trim();
+    const tel = document.getElementById('contatoTelefone').value.trim();
+    if (!nome || !tel) { alert('Informe nome e telefone do contato.'); return null; }
+    body.contato_nome = nome;
+    body.contato_telefone = tel;
+    body.contato_organizacao = document.getElementById('contatoOrg').value.trim() || null;
+  }
+  return body;
+}
+
+function limparForm() {
+  removeFile();
+  document.getElementById('legendaInput').value = '';
+  document.getElementById('contatoNome').value = '';
+  document.getElementById('contatoTelefone').value = '';
+  document.getElementById('contatoOrg').value = '';
+}
+
+async function enviarAgora() {
   const filtro = document.getElementById('filtroSelect').value || null;
   try {
     const cnt = await (await fetch('/api/disparos/contatos-count' + (filtro ? '?status=' + filtro : ''), { headers: authHeaders() })).json();
     if (!confirm('Disparar para ~' + cnt.count + ' contatos?')) return;
     document.getElementById('btnEnviarAgora').disabled = true;
-    const meta = await uploadToServer(selectedFile);
+    const body = await montarBody(true, null);
+    if (!body) return;
     const r = await fetch('/api/disparos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        arquivo_url: meta.arquivo_url, arquivo_tipo: meta.arquivo_tipo, arquivo_nome: meta.arquivo_nome,
-        legenda, enviar_agora: true, filtro_status: filtro,
-      }),
+      body: JSON.stringify(body),
     });
     if (r.status === 409) return alert('Já existe um disparo em andamento.');
     if (!r.ok) return alert('Erro: ' + (await r.text()));
     alert('Disparo iniciado!');
-    removeFile();
-    document.getElementById('legendaInput').value = '';
+    limparForm();
     loadDisparos();
   } catch (e) {
     alert(e.message);
@@ -175,30 +245,21 @@ function toggleAgendar() {
 }
 
 async function enviarAgendado() {
-  if (!selectedFile) return alert('Selecione um arquivo.');
-  const legenda = document.getElementById('legendaInput').value.trim();
-  if (!legenda) return alert('Digite uma legenda.');
   const data = document.getElementById('agendarData').value;
   const hora = document.getElementById('agendarHora').value;
   if (!data || !hora) return alert('Informe data e hora.');
-  const filtro = document.getElementById('filtroSelect').value || null;
   try {
-    const meta = await uploadToServer(selectedFile);
+    const body = await montarBody(false, new Date(data + 'T' + hora).toISOString());
+    if (!body) return;
     const r = await fetch('/api/disparos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({
-        arquivo_url: meta.arquivo_url, arquivo_tipo: meta.arquivo_tipo, arquivo_nome: meta.arquivo_nome,
-        legenda, enviar_agora: false,
-        agendado_para: new Date(data + 'T' + hora).toISOString(),
-        filtro_status: filtro,
-      }),
+      body: JSON.stringify(body),
     });
     if (r.status === 409) return alert('Já existe um disparo em andamento.');
     if (!r.ok) return alert('Erro: ' + (await r.text()));
     alert('Disparo agendado!');
-    removeFile();
-    document.getElementById('legendaInput').value = '';
+    limparForm();
     document.getElementById('agendarFields').style.display = 'none';
     loadDisparos();
   } catch (e) {
@@ -220,7 +281,10 @@ async function loadDisparos() {
       const pct = d.total ? Math.round(d.enviados / d.total * 100) : 0;
       const cc = ['agendado', 'enviando'].includes(d.status);
       const s = d.status === 'enviando';
-      return '<tr><td>' + dt + '</td><td>' + (d.arquivo_nome || d.arquivo_tipo) + '</td>'
+      const col = d.tipo === 'contato'
+        ? '👤 ' + (d.contato_nome || 'Contato')
+        : (d.arquivo_nome || d.arquivo_tipo || '—');
+      return '<tr><td>' + dt + '</td><td>' + col + '</td>'
         + '<td><span class="legenda-truncated" title="' + (d.legenda || '').replace(/"/g, '&quot;') + '">'
         + (d.legenda || '').slice(0, 50) + '</span></td>'
         + '<td><span class="status-badge ' + d.status + '">' + d.status + '</span></td>'

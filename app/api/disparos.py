@@ -68,10 +68,14 @@ async def create_disparo(
     status = "enviando" if body.enviar_agora else "agendado"
 
     disparo = Disparo(
+        tipo=body.tipo,
         arquivo_url=body.arquivo_url,
         arquivo_tipo=body.arquivo_tipo,
         arquivo_nome=body.arquivo_nome,
         legenda=body.legenda,
+        contato_nome=body.contato_nome,
+        contato_telefone=body.contato_telefone,
+        contato_organizacao=body.contato_organizacao,
         status=status,
         agendado_para=None if body.enviar_agora else body.agendado_para,
         created_by=user.username,

@@ -91,6 +91,36 @@ class UAZClient:
             payload["mentions"] = mentions
         return await self._post("/send/media", payload)
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
+    async def send_contact(
+        self,
+        number: str,
+        full_name: str,
+        phone_number: str,
+        *,
+        organization: str | None = None,
+        email: str | None = None,
+        url: str | None = None,
+        read_chat: bool = True,
+        delay: int = 0,
+    ) -> dict:
+        """Envia um cartão de contato (vCard) clicável. `phone_number` aceita
+        múltiplos números separados por vírgula."""
+        payload: dict[str, Any] = {
+            "number": number,
+            "fullName": full_name,
+            "phoneNumber": phone_number,
+            "readchat": read_chat,
+            "delay": delay,
+        }
+        if organization:
+            payload["organization"] = organization
+        if email:
+            payload["email"] = email
+        if url:
+            payload["url"] = url
+        return await self._post("/send/contact", payload)
+
     async def send_media_bytes(
         self,
         number: str,
