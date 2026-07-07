@@ -403,17 +403,25 @@ async def embed_probe(token: str = Query(...), q: str = Query(...)):
             "SELECT content, source, similarity FROM "
             "match_documents(CAST(:e AS vector), 3, '{}'::jsonb)"
         ), {"e": str(qv)})).fetchall()
+        # query DIRETA ORDER BY (o que o fix novo usa) — no MESMO app/sessão
+        ob = (await db.execute(text(
+            "SELECT id, content, source, 1-(embedding <=> CAST(:e AS vector)) AS sim "
+            "FROM knowledge_chunks ORDER BY embedding <=> CAST(:e AS vector) LIMIT 3"
+        ), {"e": str(qv)})).fetchall()
+        sp = (await db.execute(text("SHOW search_path"))).fetchone()[0]
 
     return {
         "q": q,
-        "q_len": len(q),
-        "qv_dim": len(qv),
+        "app_search_path": sp,
         "stored_pix_id": stored_id,
-        "cosine_python(q, pix_stored)": round(cos_py, 4),
         "cosine_pgvector(q, pix_stored)": round(cos_pg, 4),
         "match_documents_top3": [
-            {"sim": round(float(r.similarity), 4), "src": r.source, "snip": r.content[:45]}
+            {"sim": round(float(r.similarity), 4), "src": r.source, "snip": r.content[:40]}
             for r in md
+        ],
+        "order_by_direct_top3": [
+            {"id": r.id, "sim": round(float(r.sim), 4), "src": r.source, "snip": r.content[:40]}
+            for r in ob
         ],
     }
 
