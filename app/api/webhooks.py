@@ -23,6 +23,22 @@ def _verify_hmac(body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+@router.post("/hooks/sheets-sync")
+async def sheets_sync_hook(request: Request) -> Response:
+    """Gatilho chamado pelo Apps Script (onEdit) da planilha → sincroniza na hora.
+    Autenticado por ?key= (settings.sheets_hook_key). Roda em background."""
+    import asyncio
+
+    key = request.query_params.get("key", "")
+    if not settings.sheets_hook_key or key != settings.sheets_hook_key:
+        return Response(status_code=401)
+
+    from app.workers.sheets_sync import run_all_syncs
+    asyncio.create_task(run_all_syncs())
+    logger.info("sheets-sync-hook disparado pela planilha")
+    return Response(status_code=202)
+
+
 @router.post("/webhook")
 async def webhook_handler(request: Request) -> Response:
     """Endpoint principal que recebe webhooks da uazapi v2."""

@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     sheets_plano_leitura_id: str = ""
     sheets_log_notificacoes_id: str = ""
     sheets_log_oracao_id: str = ""
+    sheets_hook_key: str = ""  # segredo pro webhook onEdit da planilha
 
     # Gmail
     gmail_from: str = "lidia@paes.org.br"
