@@ -316,6 +316,54 @@ async def reembed_knowledge(token: str = Query(...)):
     return {"ok": True, "started": True}
 
 
+@router.get("/embed-diag")
+async def embed_diag(token: str = Query(...)):
+    """Diagnóstico do embedding: revela base_url/modelo e mede se o modelo é
+    semântico (case-insensitive) ou degenerado (só casa string idêntica)."""
+    _check(token)
+    import os
+    import math
+    import openai
+    from app.core.config import settings as _s
+
+    client = openai.AsyncOpenAI(api_key=_s.openai_api_key)
+    base_url = str(getattr(client, "base_url", "?"))
+
+    def _cos(a, b):
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(y * y for y in b))
+        return dot / (na * nb) if na and nb else 0.0
+
+    pairs = {
+        "identico": ("chave PIX da PAES", "chave PIX da PAES"),
+        "case": ("chave PIX da PAES", "chave pix da paes"),
+        "parafrase": ("qual a chave pix da igreja", "chave PIX da PAES"),
+        "nao_relacionado": ("chave PIX da PAES", "horário dos cultos de domingo"),
+    }
+    flat = []
+    for a, b in pairs.values():
+        flat.extend([a, b])
+    resp = await client.embeddings.create(model=_s.openai_embedding_model, input=flat)
+    vecs = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+    out = {}
+    i = 0
+    for name in pairs:
+        out[name] = round(_cos(vecs[i], vecs[i + 1]), 4)
+        i += 2
+
+    return {
+        "openai_base_url": base_url,
+        "OPENAI_BASE_URL_env": os.environ.get("OPENAI_BASE_URL", "(não setado)"),
+        "OPENAI_API_BASE_env": os.environ.get("OPENAI_API_BASE", "(não setado)"),
+        "modelo": _s.openai_embedding_model,
+        "dimensao": len(vecs[0]),
+        "cosine": out,
+        "veredito": ("DEGENERADO (case quebra o match)" if out["case"] < 0.9
+                     else "OK (semântico)"),
+    }
+
+
 @router.get("/rag-test")
 async def rag_test(token: str = Query(...), q: str = Query(...), k: int = Query(5)):
     """Roda a busca RAG real numa query e retorna os chunks + scores."""
