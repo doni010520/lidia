@@ -264,6 +264,45 @@ async def migrate_disparos_contato(token: str = Query(...)):
     return {"ok": not errors, "applied": done, "errors": errors}
 
 
+@router.post("/reembed-knowledge")
+async def reembed_knowledge(token: str = Query(...)):
+    """Re-embeda TODOS os knowledge_chunks com o modelo atual do app.
+    Corrige inconsistência de modelo entre embeddings antigos e as buscas.
+    Roda em background; acompanhe por /debug/logs (grep reembed)."""
+    _check(token)
+    import asyncio
+
+    async def _run():
+        import openai
+        from app.core.config import settings as _s
+        client = openai.AsyncOpenAI(api_key=_s.openai_api_key)
+        async with async_session_factory() as db:
+            rows = (await db.execute(
+                text("SELECT id, content FROM knowledge_chunks ORDER BY id")
+            )).fetchall()
+            total = len(rows)
+            done = 0
+            for i in range(0, total, 100):
+                batch = rows[i:i + 100]
+                resp = await client.embeddings.create(
+                    model=_s.openai_embedding_model,
+                    input=[r.content for r in batch],
+                )
+                data = sorted(resp.data, key=lambda d: d.index)
+                for r, emb in zip(batch, data):
+                    await db.execute(
+                        text("UPDATE knowledge_chunks SET embedding = CAST(:e AS vector) WHERE id = :id"),
+                        {"e": str(emb.embedding), "id": r.id},
+                    )
+                await db.commit()
+                done += len(batch)
+                logger.info(f"reembed-knowledge: {done}/{total}")
+        logger.info("reembed-knowledge CONCLUIDO")
+
+    asyncio.create_task(_run())
+    return {"ok": True, "started": True}
+
+
 @router.get("/rag-test")
 async def rag_test(token: str = Query(...), q: str = Query(...), k: int = Query(5)):
     """Roda a busca RAG real numa query e retorna os chunks + scores."""

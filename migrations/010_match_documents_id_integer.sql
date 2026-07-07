@@ -15,7 +15,7 @@ BEGIN
     RETURN QUERY
     SELECT d.id, d.content, d.metadata, d.source,
            1 - (d.embedding <=> query_embedding)::double precision AS similarity
-    FROM public.knowledge_chunks d
+    FROM knowledge_chunks d
     WHERE (filter = '{}'::jsonb OR d.metadata @> filter)
       AND (
         (d.metadata->>'data_inicio' IS NULL AND d.metadata->>'data_fim' IS NULL)
