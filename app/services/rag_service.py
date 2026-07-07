@@ -42,37 +42,19 @@ class RAGService:
             logger.exception("Erro ao gerar embedding")
             return []
 
-        filter_json = {"source": source_filter} if source_filter else {}
-
         from app.db import async_session_factory
 
-        # Tentativa principal em sessão própria
+        # Query direta em knowledge_chunks (lidia). NÃO usamos match_documents:
+        # existem 2 overloads (lidia + public antiga que lê documents_paes) e,
+        # dependendo do search_path da conexão, a chamada resolvia pra função
+        # errada — retornando embeddings velhos e ignorando os chunks certos.
+        # Sessão isolada: um erro aqui não envenena a transação do process_message.
         async with async_session_factory() as iso_db:
             try:
-                result = await iso_db.execute(
-                    text("""
-                        SELECT content, source, similarity AS score
-                        FROM match_documents(CAST(:embedding AS vector), :limit, CAST(:filter AS jsonb))
-                    """),
-                    {"embedding": str(embedding), "limit": k, "filter": json.dumps(filter_json)},
-                )
-                rows = result.fetchall()
-            except Exception as e:
-                logger.warning(f"match_documents indisponivel ({type(e).__name__}: {str(e)[:200]}), fallback")
-                rows = None
-
-        # Fallback em sessão separada (sessão anterior abortada)
-        if rows is None:
-            async with async_session_factory() as iso_db2:
-                return await self._search_fallback(embedding, iso_db2, k, source_filter)
-
-        chunks = [
-            RAGChunk(content=r.content, source=r.source, score=float(r.score) if r.score else 0.0)
-            for r in rows
-        ]
-        if chunks:
-            logger.debug(f"RAG '{query[:50]}...' -> {len(chunks)} chunks (top: {chunks[0].score:.3f})")
-        return chunks
+                return await self._search_fallback(embedding, iso_db, k, source_filter)
+            except Exception:
+                logger.exception("Erro na busca RAG")
+                return []
 
     async def _search_fallback(self, embedding, db, k, source_filter):
         params = {"embedding": str(embedding), "limit": k}
