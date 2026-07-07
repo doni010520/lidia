@@ -206,8 +206,10 @@ async def sync_informacoes() -> int:
     # Montar textos para vectorizar
     texts: list[dict] = []
     for row in rows:
-        pergunta = row.get("Pergunta", row.get("pergunta", ""))
-        resposta = row.get("Resposta", row.get("resposta", ""))
+        pergunta = (row.get("Pergunta") or row.get("pergunta")
+                    or row.get("Perguntas") or row.get("perguntas") or "")
+        resposta = (row.get("Resposta") or row.get("resposta")
+                    or row.get("Respostas") or row.get("respostas") or "")
         if not pergunta and not resposta:
             continue
         content = f"Pergunta: {pergunta}\nResposta: {resposta}" if pergunta else resposta
