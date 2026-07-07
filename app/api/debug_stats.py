@@ -201,6 +201,9 @@ async def trigger_worker(token: str = Query(...), worker: str = Query(...)):
         elif worker == "boas_vindas":
             from app.workers.boas_vindas_convertidos import disparar_boas_vindas
             result = await disparar_boas_vindas()
+        elif worker == "sheets":
+            from app.workers.sheets_sync import run_all_syncs
+            result = await run_all_syncs()
         else:
             return {"ok": False, "error": f"Worker desconhecido: {worker}"}
         return {"ok": True, "result": result}
