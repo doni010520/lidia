@@ -364,6 +364,60 @@ async def embed_diag(token: str = Query(...)):
     }
 
 
+@router.get("/embed-probe")
+async def embed_probe(token: str = Query(...), q: str = Query(...)):
+    """Isola onde o RAG quebra: embeda q, compara (cosine python) contra o
+    vetor ARMAZENADO do chunk PIX, e roda match_documents com o MESMO vetor."""
+    _check(token)
+    import math
+    import json
+    import openai
+    from app.core.config import settings as _s
+
+    client = openai.AsyncOpenAI(api_key=_s.openai_api_key)
+    resp = await client.embeddings.create(model=_s.openai_embedding_model, input=q)
+    qv = resp.data[0].embedding
+
+    def _cos(a, b):
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a)); nb = math.sqrt(sum(y * y for y in b))
+        return dot / (na * nb) if na and nb else 0.0
+
+    async with async_session_factory() as db:
+        # vetor armazenado do chunk PIX
+        row = (await db.execute(text(
+            "SELECT id, embedding::text FROM knowledge_chunks "
+            "WHERE content ILIKE '%chave PIX%' ORDER BY id LIMIT 1"
+        ))).fetchone()
+        stored_id = row.id
+        stored_vec = json.loads(row.embedding)
+        cos_py = _cos(qv, stored_vec)
+        # mesmo vetor da query vs mesmo chunk, mas via pgvector <=>
+        pg = (await db.execute(text(
+            "SELECT 1 - (embedding <=> CAST(:e AS vector)) AS sim "
+            "FROM knowledge_chunks WHERE id = :id"
+        ), {"e": str(qv), "id": stored_id})).fetchone()
+        cos_pg = float(pg.sim)
+        # match_documents top-3 com esse vetor
+        md = (await db.execute(text(
+            "SELECT content, source, similarity FROM "
+            "match_documents(CAST(:e AS vector), 3, '{}'::jsonb)"
+        ), {"e": str(qv)})).fetchall()
+
+    return {
+        "q": q,
+        "q_len": len(q),
+        "qv_dim": len(qv),
+        "stored_pix_id": stored_id,
+        "cosine_python(q, pix_stored)": round(cos_py, 4),
+        "cosine_pgvector(q, pix_stored)": round(cos_pg, 4),
+        "match_documents_top3": [
+            {"sim": round(float(r.similarity), 4), "src": r.source, "snip": r.content[:45]}
+            for r in md
+        ],
+    }
+
+
 @router.get("/rag-test")
 async def rag_test(token: str = Query(...), q: str = Query(...), k: int = Query(5)):
     """Roda a busca RAG real numa query e retorna os chunks + scores."""
