@@ -237,8 +237,12 @@ async def sync_informacoes() -> int:
                 input=batch_texts,
             )
 
+            # A OpenAI pode devolver os embeddings fora de ordem — reordena por index
+            # antes de associar, senão o vetor gruda na linha errada.
+            data_ordenada = sorted(resp.data, key=lambda d: d.index)
+
             import json
-            for t, emb_data in zip(batch, resp.data):
+            for t, emb_data in zip(batch, data_ordenada):
                 await db.execute(
                     text("""
                         INSERT INTO knowledge_chunks (content, embedding, metadata, source)
