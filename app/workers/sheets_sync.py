@@ -213,7 +213,12 @@ async def sync_informacoes() -> int:
         if not pergunta and not resposta:
             continue
         content = f"Pergunta: {pergunta}\nResposta: {resposta}" if pergunta else resposta
-        texts.append({"content": content, "source": "sheets_informacoes"})
+        # Embed pela PERGUNTA (é o que o usuário digita). A resposta longa,
+        # se entrar no vetor, dilui a pergunta e mata o match. O conteúdo
+        # completo continua guardado e é o que a LidIA entrega.
+        embed_text = pergunta or resposta
+        texts.append({"content": content, "embed_text": embed_text,
+                      "source": "sheets_informacoes"})
 
     if not texts:
         return 0
@@ -230,7 +235,7 @@ async def sync_informacoes() -> int:
 
         for i in range(0, len(texts), 100):
             batch = texts[i:i + 100]
-            batch_texts = [t["content"] for t in batch]
+            batch_texts = [t["embed_text"] for t in batch]
 
             resp = await client.embeddings.create(
                 model=settings.openai_embedding_model,

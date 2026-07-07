@@ -271,6 +271,19 @@ async def reembed_knowledge(token: str = Query(...)):
     Roda em background; acompanhe por /debug/logs (grep reembed)."""
     _check(token)
     import asyncio
+    import re
+
+    def _embed_text_for(content: str) -> str:
+        """Q&A: embeda só a PERGUNTA (é o que o usuário digita; a resposta
+        longa dilui o vetor). Outros formatos (eventos, prosa): conteúdo todo."""
+        m = re.match(
+            r"^\s*(?:Pergunta|PERGUNTAS?)\s*:\s*(.*?)\s*"
+            r"(?:\n\s*(?:Resposta|RESPOSTAS?)\s*:|$)",
+            content, re.IGNORECASE | re.DOTALL,
+        )
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+        return content
 
     async def _run():
         import openai
@@ -286,7 +299,7 @@ async def reembed_knowledge(token: str = Query(...)):
                 batch = rows[i:i + 100]
                 resp = await client.embeddings.create(
                     model=_s.openai_embedding_model,
-                    input=[r.content for r in batch],
+                    input=[_embed_text_for(r.content) for r in batch],
                 )
                 data = sorted(resp.data, key=lambda d: d.index)
                 for r, emb in zip(batch, data):
