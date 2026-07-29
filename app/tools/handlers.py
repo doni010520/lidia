@@ -22,6 +22,7 @@ from app.tools.tool_modules import (
     atualizar_sobrenome,
     buscar_documentos,
     buscar_evento,
+    buscar_material,
     cadastrar_aniversario,
     cadastrar_contato,
     celulas_proximas,
@@ -31,6 +32,7 @@ from app.tools.tool_modules import (
     informacoes_lidia,
     link_foto_perfil,
     minha_caminhada,
+    minha_inscricao,
     notificar_time_interno,
     novos_convertidos,
     oracao_do_dia,
@@ -72,6 +74,9 @@ _HANDLERS: dict[str, Any] = {
     "minha_caminhada": minha_caminhada,
     "panorama_igreja": panorama_igreja,
     "resumo_celula": resumo_celula,
+    # ── Diacon (materiais + inscrições) ──
+    "buscar_material": buscar_material,
+    "minha_inscricao": minha_inscricao,
 }
 
 

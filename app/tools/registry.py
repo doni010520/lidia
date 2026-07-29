@@ -521,6 +521,64 @@ CELULAS_PROXIMAS: dict[str, Any] = {
 }
 
 
+BUSCAR_MATERIAL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "buscar_material",
+        "description": (
+            "Envia o PDF de um material publicado pela igreja: lição de célula, "
+            "GAS (guia do sermão), material de evento. Use quando a pessoa pede: "
+            "'me manda a lição', 'quero o GAS', 'cadê o material da conferência', "
+            "'material da célula'. A Diacon decide o acesso pelo telefone — SEMPRE "
+            "chame a tool e deixe a Diacon julgar; nunca ofereça um material que "
+            "você não sabe se existe. Se a pessoa citar uma data, passe em 'data'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "material": {
+                    "type": "string",
+                    "description": "O que a pessoa quer (ex: 'lição', 'GAS', 'material da conferência')",
+                },
+                "telefone": {"type": "string", "description": "Telefone de quem pediu"},
+                "data": {"type": "string", "description": "Data do material (YYYY-MM-DD), opcional"},
+                "document_id": {
+                    "type": "string",
+                    "description": "ID do material, só quando a tool já pediu pra escolher entre vários",
+                },
+            },
+            "required": ["material", "telefone"],
+        },
+    },
+}
+
+MINHA_INSCRICAO: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "minha_inscricao",
+        "description": (
+            "Envia o comprovante/QR de inscrição em evento da pessoa (PDF), ou o "
+            "link do autoatendimento pra ver tudo e pagar pendência. Use quando "
+            "pedem: 'cadê minha inscrição?', 'meu comprovante', 'o QR da entrada', "
+            "'não achei o e-mail da inscrição'. SEMPRE chame a tool — ela decide "
+            "entre mandar o PDF ou o link. Se a pessoa tem mais de uma inscrição, "
+            "a tool pede pra escolher (passe 'event_slug')."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone de quem pediu"},
+                "event_slug": {
+                    "type": "string",
+                    "description": "Slug do evento, só quando a tool já pediu pra escolher entre vários",
+                },
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
+
 # ── Mapa completo ──
 
 ALL_TOOLS: dict[str, dict[str, Any]] = {
@@ -549,6 +607,9 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "minha_caminhada": MINHA_CAMINHADA,
     "panorama_igreja": PANORAMA_IGREJA,
     "resumo_celula": RESUMO_CELULA,
+    # ── Diacon (materiais + inscrições) ──
+    "buscar_material": BUSCAR_MATERIAL,
+    "minha_inscricao": MINHA_INSCRICAO,
 }
 
 

@@ -5,6 +5,8 @@ de envio sem precisar de código.
 """
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +15,7 @@ from app.services.deps import get_uaz_client
 
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    target_phone = args.get("telefone") or args.get("phone") or phone
+    target_phone = resolve_phone(args.get("telefone") or args.get("phone"), phone)
     if not target_phone:
         return "Erro: 'telefone' é obrigatório."
 

@@ -8,6 +8,8 @@ do ministério de Oração por WhatsApp (telefones em equipes_responsaveis).
 """
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +88,7 @@ async def _notificar_lideres(
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
     pedido = (args.get("pedido") or args.get("request") or "").strip()
     nome = (args.get("nome") or args.get("name") or "").strip()
-    tel = args.get("telefone") or args.get("phone") or phone
+    tel = resolve_phone(args.get("telefone") or args.get("phone"), phone)
 
     if len(pedido) < 2:
         return "Erro: 'pedido' precisa ter pelo menos 2 caracteres."

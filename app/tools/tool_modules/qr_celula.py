@@ -9,6 +9,8 @@ Se a pessoa lidera mais de uma célula, devolve a lista pra escolher.
 """
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,7 @@ from app.services.deps import get_uaz_client
 
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    target_phone = args.get("telefone") or args.get("phone") or phone
+    target_phone = resolve_phone(args.get("telefone") or args.get("phone"), phone)
     group_id = (args.get("group_id") or args.get("celula_id") or "").strip() or None
 
     if not target_phone:

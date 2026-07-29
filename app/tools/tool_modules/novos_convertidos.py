@@ -4,6 +4,8 @@ Diacon = fonte de verdade. Vai como POST /pastoral com area='decision'.
 """
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +14,7 @@ from app.services import diacon_client
 
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    telefone = args.get("telefone") or phone
+    telefone = resolve_phone(args.get("telefone"), phone)
     nome = (args.get("nome") or "").strip()
 
     if not nome:

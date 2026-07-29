@@ -35,6 +35,9 @@ TOOLS_ALLOWED: list[str] = [
     "minha_caminhada",
     "panorama_igreja",
     "resumo_celula",
+    # ── Diacon (materiais + inscrições) ──
+    "buscar_material",
+    "minha_inscricao",
 ]
 tools_allowed: list[dict] = get_tools(TOOLS_ALLOWED)
 

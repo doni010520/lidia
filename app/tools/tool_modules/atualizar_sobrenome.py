@@ -1,6 +1,8 @@
 """Tool: atualizar_sobrenome — atualiza full_name do membro no Diacon."""
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from loguru import logger
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +12,7 @@ from app.services import diacon_client
 
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    telefone = args.get("telefone") or phone
+    telefone = resolve_phone(args.get("telefone"), phone)
     nome_completo = (args.get("nome_completo") or "").strip()
 
     if not nome_completo:

@@ -1,6 +1,8 @@
 """Tool: cadastrar_aniversario — atualiza birth_date do membro no Diacon."""
 from __future__ import annotations
 
+from app.tools.tool_modules._phone import resolve_phone
+
 from datetime import date
 
 from loguru import logger
@@ -12,7 +14,7 @@ from app.services import diacon_client
 
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    telefone = args.get("telefone") or phone
+    telefone = resolve_phone(args.get("telefone"), phone)
     data_str = args.get("data")
     if not data_str:
         return "Erro: 'data' é obrigatória (YYYY-MM-DD)."

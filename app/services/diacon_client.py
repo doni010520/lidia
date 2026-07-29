@@ -284,6 +284,97 @@ async def cells_summary_pdf(
         return resp.content, None
 
 
+# ── Documentos (materiais: lição, GAS, material de evento) ──
+
+async def documents_types() -> dict[str, Any]:
+    """GET /documents/types — catálogo de materiais publicados (label + aliases)."""
+    return await _request_json("GET", "documents/types")
+
+
+async def documents_list(phone: str) -> dict[str, Any]:
+    """GET /documents/list?phone= — o que ESTE telefone pode receber."""
+    return await _request_json("GET", "documents/list", params={"phone": phone})
+
+
+async def document_pdf(
+    phone: str,
+    *,
+    type: str | None = None,
+    date: str | None = None,
+    document_id: str | None = None,
+) -> tuple[bytes, dict | None]:
+    """GET /documents — PDF do material.
+
+    Devolve (pdf_bytes, None) em sucesso; (b"", payload_json) quando a API
+    responde JSON de escolha (400 com `options[]`). Levanta DiaconError em
+    403 (sem acesso) / 404 (não existe) — a `message` já vem pastoral.
+
+    Atenção: este endpoint responde PDF no sucesso e JSON no erro.
+    """
+    if not _enabled():
+        raise DiaconError("Diacon não configurado")
+    url = f"{_base_url()}/documents"
+    params: dict[str, Any] = {"phone": phone}
+    if type:
+        params["type"] = type
+    if date:
+        params["date"] = date
+    if document_id:
+        params["document_id"] = document_id
+    async with httpx.AsyncClient(timeout=settings.diacon_timeout_seconds) as client:
+        resp = await client.get(url, headers=_headers(), params=params)
+        ctype = resp.headers.get("content-type", "")
+        if resp.is_success and "application/pdf" in ctype:
+            return resp.content, None
+        # 400 com lista de opções → devolve JSON pra tool perguntar qual
+        if resp.status_code == 400 and "application/json" in ctype:
+            try:
+                return b"", resp.json()
+            except Exception:
+                _raise_for_status(resp, endpoint="GET documents")
+        # 403 / 404 / outros → DiaconError (message pastoral)
+        _raise_for_status(resp, endpoint="GET documents")
+        return resp.content, None
+
+
+# ── Inscrições em eventos (comprovante + QR de entrada) ──
+
+async def registration_pdf(
+    phone: str, *, event_slug: str | None = None
+) -> tuple[bytes, dict | None]:
+    """GET /registrations — PDF do comprovante/QR de inscrição.
+
+    (pdf_bytes, None) em sucesso; (b"", payload_json) em 400 (mais de uma
+    inscrição confirmada → escolher `event_slug`). Levanta DiaconError em
+    404 (nenhuma inscrição confirmada, ou só pendente de pagamento — nesse
+    caso use registration_link).
+    """
+    if not _enabled():
+        raise DiaconError("Diacon não configurado")
+    url = f"{_base_url()}/registrations"
+    params: dict[str, Any] = {"phone": phone}
+    if event_slug:
+        params["event_slug"] = event_slug
+    async with httpx.AsyncClient(timeout=settings.diacon_timeout_seconds) as client:
+        resp = await client.get(url, headers=_headers(), params=params)
+        ctype = resp.headers.get("content-type", "")
+        if resp.is_success and "application/pdf" in ctype:
+            return resp.content, None
+        if resp.status_code == 400 and "application/json" in ctype:
+            try:
+                return b"", resp.json()
+            except Exception:
+                _raise_for_status(resp, endpoint="GET registrations")
+        _raise_for_status(resp, endpoint="GET registrations")
+        return resp.content, None
+
+
+async def registration_link(phone: str) -> dict[str, Any]:
+    """POST /registrations/link — link autenticado do autoatendimento de inscrições
+    (ver comprovante/QR e pagar pendências). Traz também `upcoming`."""
+    return await _request_json("POST", "registrations/link", json_body={"phone": phone})
+
+
 # ── Events ──
 
 async def events_upcoming(limit: int = 5) -> dict[str, Any]:
