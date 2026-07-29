@@ -16,6 +16,12 @@ from app.models.conversation import Contact
 from app.services import diacon_client
 
 
+def _clean_phone(raw: object) -> str:
+    """Extrai só os dígitos. Placeholders do modelo ('(não informado)',
+    'não informado', vazio) viram '' e caem no fallback do remetente."""
+    return "".join(ch for ch in str(raw or "") if ch.isdigit())
+
+
 def _map_status_to_diacon(status: str) -> str:
     """Nossos status ('membro', 'visitante') para Diacon ('active', 'visitor')."""
     s = (status or "").lower().strip()
@@ -32,7 +38,12 @@ def _map_status_to_diacon(status: str) -> str:
 
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
     nome = (args.get("nome") or "").strip()
-    telefone = args.get("telefone") or phone
+    # NÃO confiar cegamente no telefone que o modelo preenche: ele às vezes
+    # manda placeholder ("(não informado)") quando a pessoa não digita o número.
+    # Usa o argumento só se for um telefone plausível; senão, o número real do
+    # remetente (webhook), que é quem está se cadastrando pelo WhatsApp.
+    _arg_tel = _clean_phone(args.get("telefone"))
+    telefone = _arg_tel if len(_arg_tel) >= 10 else phone
     email = args.get("email")
     status_raw = args.get("status") or "visitante"
     aniversario_str = args.get("aniversario")
