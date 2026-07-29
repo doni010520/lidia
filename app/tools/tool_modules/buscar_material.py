@@ -68,9 +68,12 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
         )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_material: documents {e.code} {e}")
-        # 403 (sem acesso) / 404 (não existe) já vêm com message pastoral — repassa
+        # 403 (sem acesso) / 404 (não existe) já vêm com message pastoral — repassa.
+        # Exceção: erro de escopo/token é técnico e NUNCA deve vazar pro membro.
         msg = str(e)
-        if e.code in ("forbidden", "not_found") and msg:
+        low = msg.lower()
+        tecnico = "escopo" in low or "token" in low or "scope" in low
+        if e.code in ("forbidden", "not_found") and msg and not tecnico:
             return msg
         return "Não consegui pegar o material agora. Tenta de novo em alguns segundos."
 
