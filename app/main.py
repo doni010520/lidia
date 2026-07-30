@@ -218,14 +218,17 @@ def create_app() -> FastAPI:
     from app.api.auth import router as auth_router
     from app.api.disparos import router as disparos_router
     from app.api.eventos import router as eventos_router
-    from app.api.debug_stats import router as debug_router
-
     app.include_router(webhook_router)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(disparos_router)
     app.include_router(eventos_router)
-    app.include_router(debug_router)
+    # Endpoints /debug/* executam SQL e tools arbitrárias — só quando DEBUG=true.
+    # Em produção estável fica DEBUG=false; ligue temporariamente pra diagnosticar.
+    if settings.debug:
+        from app.api.debug_stats import router as debug_router
+        app.include_router(debug_router)
+        logger.warning("Endpoints /debug/* ATIVOS (DEBUG=true) — desligue quando terminar")
 
     # Páginas dedicadas (servidas antes do mount estático)
     @app.get("/disparos", include_in_schema=False)
