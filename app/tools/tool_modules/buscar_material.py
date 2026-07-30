@@ -61,6 +61,15 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
             return "No momento não há materiais publicados. Posso ajudar com outra coisa?"
         doc_type = matched.get("type")
 
+        # Material que exige data (ex: GAS): sem data, PEÇA a data em vez de
+        # tentar — sem ela a Diacon responde "não há publicado", o que confunde.
+        if matched.get("requires_date") and not date:
+            label = matched.get("label") or "material"
+            return (
+                f"De qual data é o {label} que você quer? "
+                "Me diz o dia (ex: 02/08)."
+            )
+
     # 3. Pedir o PDF
     try:
         pdf_bytes, choice = await diacon_client.document_pdf(
