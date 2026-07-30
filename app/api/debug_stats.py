@@ -117,7 +117,7 @@ async def history_debug(token: str = Query(...), phone: str = Query(...), limit:
 
 @router.post("/test-tool")
 async def test_tool(token: str = Query(...), name: str = Query(...),
-                    phone: str = Query("557193061031"), args: str = Query("{}")):
+                    phone: str = Query(...), args: str = Query("{}")):
     """Invoca uma tool diretamente sem passar pelo LLM/webhook.
     args: JSON string com os argumentos.
     Retorna o resultado da tool + qualquer exceção capturada."""
