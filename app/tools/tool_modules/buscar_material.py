@@ -10,6 +10,8 @@ Fluxo:
 """
 from __future__ import annotations
 
+import unicodedata
+
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,16 +20,22 @@ from app.services.deps import get_uaz_client
 from app.tools.tool_modules._phone import resolve_phone
 
 
+def _norm(s: object) -> str:
+    """minúsculas + sem acento — pra 'Sermão' casar com o alias 'sermao'."""
+    txt = unicodedata.normalize("NFKD", str(s or "").lower().strip())
+    return "".join(c for c in txt if not unicodedata.combining(c))
+
+
 def _match_type(query: str, types: list[dict]) -> dict | None:
-    """Casa o texto da pessoa contra label/type/aliases (substring, sem caso)."""
-    q = (query or "").lower().strip()
+    """Casa o texto da pessoa contra label/type/aliases (substring, sem caso/acento)."""
+    q = _norm(query)
     if not q:
         return None
     for t in types:
         cands = [t.get("label") or "", t.get("type") or ""]
         cands += [a for a in (t.get("aliases") or []) if a]
         for c in cands:
-            cl = str(c).lower().strip()
+            cl = _norm(c)
             if cl and (cl in q or q in cl):
                 return t
     return None
