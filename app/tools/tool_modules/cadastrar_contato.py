@@ -67,8 +67,27 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
             status=diacon_status,
         )
     except diacon_client.DiaconError as e:
-        logger.warning(f"cadastrar_contato: Diacon {e.code} {e}")
-        return f"Não consegui cadastrar agora ({e.code or 'erro'}). Tenta de novo em alguns segundos."
+        # A Diacon só aceita telefone BR. Número internacional (ex.: +1 EUA) volta
+        # bad_request "Telefone inválido" e travava a pessoa no loop de cadastro.
+        # Cadastra só pelo nome (full_name é o único obrigatório) pra desbloquear.
+        if e.code == "bad_request" and "telefone" in str(e).lower():
+            logger.warning(
+                f"cadastrar_contato: Diacon recusou o telefone ({telefone}); "
+                "cadastrando sem telefone pra não travar o atendimento"
+            )
+            try:
+                resp = await diacon_client.member_create(
+                    full_name=nome,
+                    email=email,
+                    birth_date=birth_date,
+                    status=diacon_status,
+                )
+            except diacon_client.DiaconError as e2:
+                logger.warning(f"cadastrar_contato: Diacon {e2.code} {e2}")
+                return f"Não consegui cadastrar agora ({e2.code or 'erro'}). Tenta de novo em alguns segundos."
+        else:
+            logger.warning(f"cadastrar_contato: Diacon {e.code} {e}")
+            return f"Não consegui cadastrar agora ({e.code or 'erro'}). Tenta de novo em alguns segundos."
 
     member = resp.get("member") or {}
     created = resp.get("created", False)
