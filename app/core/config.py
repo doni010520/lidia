@@ -103,6 +103,25 @@ class Settings(BaseSettings):
     n8n_google_token: str = ""
     n8n_google_timeout_seconds: int = 30
 
+    # ── Pré-roteador de oração ──
+    # Resolve em código a intenção "mural / oração do dia" antes do LLM,
+    # e suprime o dica_rag naquele turno (o RAG puxava a Alvorada por
+    # proximidade semântica e o modelo respondia com ela).
+    oracao_router_enabled: bool = True
+    # Anexa os horários/links das Alvoradas ao envio do mural, evitando
+    # o turno extra de "você quer o mural ou a alvorada?".
+    oracao_incluir_alvoradas: bool = True
+
+    # ── Alvoradas (fonte única de verdade) ──
+    # Ficam aqui, e NÃO em knowledge_chunks: link é dado volátil e precisa
+    # de um lugar revisável. Dentro de embedding ninguém revisa.
+    alvorada_oracao_quando: str = "toda terça-feira, das 6h às 7h"
+    alvorada_oracao_link: str = ""
+    alvorada_feminina_quando: str = "toda quinta-feira, às 6h"
+    alvorada_feminina_link: str = ""
+    alvorada_homens_quando: str = "toda quarta-feira, às 6h30"
+    alvorada_homens_link: str = ""
+
     # ── Diacon API ──
     diacon_base_url: str = ""
     diacon_token: str = ""
