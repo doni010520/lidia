@@ -69,26 +69,34 @@ def _monta_mensagem(link: str, theme: dict) -> str:
     return "\n\n".join(partes) + _rodape_alvoradas()
 
 
-async def execute(args: dict, phone: str, db: AsyncSession) -> str:
-    target_phone = args.get("telefone") or args.get("phone") or phone
+async def enviar(target_phone: str) -> tuple[bool, str]:
+    """Gera o link do mural e envia. Retorna (ok, mensagem_para_o_agente).
+
+    `ok=False` significa que a pessoa NÃO recebeu nada.
+
+    Quem chama precisa dessa informação. O `oracao_router` afirmava "já foi
+    enviado" apoiado só na ausência de exceção — mas os caminhos de erro aqui
+    retornam string normal, sem levantar nada. Resultado: um não-membro ouvia
+    "Mandei aqui pra você 🙏" sem ter recebido coisa alguma.
+    """
     if not target_phone:
-        return "Erro: 'telefone' é obrigatório."
+        return False, "Erro: 'telefone' é obrigatório."
 
     if not diacon_client.is_enabled():
-        return "Erro: integração Diacon não configurada."
+        return False, "Erro: integração Diacon não configurada."
 
     try:
         data = await diacon_client.oracao_link(target_phone)
     except diacon_client.DiaconError as e:
         logger.warning(f"oracao_do_dia: {e.code} {e}")
         if e.code == "not_found":
-            return (
-                "Você ainda não está cadastrado como membro. "
-                "Peça pra alguém da igreja te cadastrar primeiro."
+            return False, (
+                "A pessoa ainda não está cadastrada como membro, então o link "
+                "autenticado do mural não pôde ser gerado."
             )
         if e.code == "bad_request":
-            return "Telefone inválido."
-        return "Não consegui gerar o link de oração agora. Tenta de novo daqui a pouco."
+            return False, "Telefone inválido."
+        return False, "Não consegui gerar o link de oração agora (falha temporária)."
 
     link = data.get("link", "")
     image_url = data.get("image_url", "")
@@ -105,7 +113,7 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
                 target_phone, image_url, type="image", text=mensagem
             )
             logger.info(f"oracao_do_dia: card + alvoradas enviados para {target_phone}")
-            return "Mural da oração do dia enviado com o card e os horários das Alvoradas."
+            return True, "Mural da oração do dia enviado com o card e os horários das Alvoradas."
         except Exception:
             logger.exception("Falha ao enviar card de oração")
 
@@ -113,7 +121,14 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
     try:
         await uaz.send_text(target_phone, mensagem)
         logger.info(f"oracao_do_dia: texto enviado para {target_phone}")
-        return "Mural da oração do dia enviado com os horários das Alvoradas."
+        return True, "Mural da oração do dia enviado com os horários das Alvoradas."
     except Exception:
         logger.exception("Falha ao enviar link de oração")
-        return f"Link gerado mas não consegui enviar: {link}"
+        return False, "Link gerado, mas o envio pelo WhatsApp falhou."
+
+
+async def execute(args: dict, phone: str, db: AsyncSession) -> str:
+    """Entrada da tool — o LLM recebe só o texto do resultado."""
+    target_phone = args.get("telefone") or args.get("phone") or phone
+    _, mensagem = await enviar(target_phone)
+    return mensagem

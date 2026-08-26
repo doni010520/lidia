@@ -353,7 +353,19 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
         log.warning("Falha ao enviar presence")
 
     # ── 10. Chamar OpenAI com tool handler ──
+    # Tools que o pré-roteador JÁ executou saem da lista deste turno. Enquanto
+    # ficavam disponíveis, o modelo chamava de novo mesmo com o system_note
+    # mandando não chamar — e a pessoa recebia o mural duplicado, com dois
+    # links autenticados diferentes. Instrução no prompt é pedido; remover da
+    # lista é garantia.
     tools = agent_module.tools_allowed
+    if oracao_route.suppress_tools:
+        _ja_executadas = set(oracao_route.suppress_tools)
+        tools = [
+            t for t in tools
+            if t.get("function", {}).get("name") not in _ja_executadas
+        ]
+        log.info(f"Tools suprimidas neste turno (já executadas em código): {sorted(_ja_executadas)}")
 
     # Closure que injeta db no handler
     from app.tools.handlers import handle_tool_call

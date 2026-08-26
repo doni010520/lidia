@@ -173,13 +173,15 @@ def alvoradas_texto(*, compacto: bool = False) -> str:
 class OracaoRoute:
     """Resultado do pré-roteamento.
 
-    handled      → o roteador assumiu o turno (RAG deve ser suprimido)
-    system_note  → bloco autoritativo anexado ao final do system prompt
-    tools_called → nomes de tools executadas em código (para analytics)
+    handled        → o roteador assumiu o turno (RAG deve ser suprimido)
+    system_note    → bloco autoritativo anexado ao final do system prompt
+    tools_called   → nomes de tools executadas em código (para analytics)
+    suppress_tools → tools a REMOVER da lista oferecida ao LLM neste turno
     """
     handled: bool = False
     system_note: str = ""
     tools_called: list[str] = field(default_factory=list)
+    suppress_tools: list[str] = field(default_factory=list)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -261,21 +263,36 @@ async def resolve(
 
     log.info("oracao_router: intenção=mural → executando oracao_do_dia (RAG suprimido)")
     try:
-        resultado = await oracao_do_dia.execute({"telefone": phone}, phone, db)
+        ok, resultado = await oracao_do_dia.enviar(phone)
     except Exception:
-        log.exception("oracao_router: falha ao executar oracao_do_dia")
+        log.exception("oracao_router: falha inesperada ao executar oracao_do_dia")
+        ok, resultado = False, "erro inesperado ao gerar o link."
+
+    # ── Falha: NADA chegou na pessoa ──
+    # A tool fica FORA de suppress_tools de propósito: o LLM precisa poder
+    # tentar de novo. E o note não pode afirmar que enviou.
+    if not ok:
+        log.warning(f"oracao_router: envio do mural não concluído — {resultado}")
         return OracaoRoute(
             handled=True,
             system_note=(
-                "## ⛳ FATO JÁ RESOLVIDO NESTE TURNO — MURAL DE ORAÇÃO\n\n"
-                "Houve uma falha técnica ao gerar o link do mural. Diga em uma "
-                "frase curta e acolhedora que teve um problema para enviar o "
-                "link agora e que ela pode pedir de novo em instantes. Não "
-                "invente link nenhum."
+                "## ⛳ SITUAÇÃO APURADA NESTE TURNO — MURAL DE ORAÇÃO\n\n"
+                "A tentativa de enviar o mural da oração do dia NÃO se concluiu: "
+                f"a pessoa NÃO recebeu nada. Motivo técnico: {resultado}\n\n"
+                "NÃO diga que enviou e NÃO invente link nenhum. Explique em uma "
+                "frase curta e acolhedora, sem jargão técnico, o que houve e qual "
+                "o próximo passo. Se o motivo for cadastro, ofereça ajudar a "
+                "resolver isso agora. Se for falha temporária, você pode chamar "
+                "`oracao_do_dia` uma única vez para tentar novamente."
             ),
             tools_called=["oracao_do_dia"],
         )
 
+    # ── Sucesso ──
+    # `suppress_tools` tira a tool da lista deste turno. Sem isso o modelo
+    # chamava `oracao_do_dia` de novo mesmo com o aviso escrito no prompt, e a
+    # pessoa recebia o mural DUPLICADO — com dois links autenticados distintos.
+    # Aviso no prompt é pedido; tirar da lista é garantia.
     return OracaoRoute(
         handled=True,
         system_note=(
@@ -285,9 +302,9 @@ async def resolve(
             f"operação: {resultado}\n\n"
             "Sua resposta agora é APENAS uma frase curta e acolhedora "
             "confirmando o envio — algo como \"Mandei aqui pra você 🙏\". "
-            "Chame `oracao_do_dia` de novo somente se o retorno acima indicar "
-            "falha. Não repita o link, não descreva o conteúdo, não faça "
-            "perguntas de escolha e não ofereça a Alvorada: ela já foi junto."
+            "Não repita o link, não descreva o conteúdo, não faça perguntas de "
+            "escolha e não ofereça a Alvorada: ela já foi junto."
         ),
         tools_called=["oracao_do_dia"],
+        suppress_tools=["oracao_do_dia"],
     )
