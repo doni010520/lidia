@@ -19,6 +19,7 @@ from app.models.conversation import Contact, Message
 from app.schemas.webhook import IncomingMessage
 from app.services.deps import get_uaz_client
 from app.services.openai_service import OpenAIService
+from app.services.oracao_router import OracaoRoute, resolve as resolve_oracao
 from app.services.rag_service import RAGService
 
 _SP_TZ = ZoneInfo("America/Sao_Paulo")
@@ -275,10 +276,21 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
         log.debug("Mensagem sem texto, ignorando")
         return
 
-    # ── 3. Pré-busca RAG ──
-    rag = _get_rag()
+    # ── 3. Pré-roteador de oração (ANTES do RAG, de propósito) ──
+    # Intenção crítica não se decide no LLM. Se a pessoa pediu o mural /
+    # oração do dia, a ferramenta roda aqui em código e o link sai no
+    # primeiro turno. Quando isso acontece, o dica_rag é SUPRIMIDO: a busca
+    # vetorial recupera a Alvorada por proximidade semântica ("oração" +
+    # "link") e o modelo respondia com esse texto pronto em vez de chamar
+    # a ferramenta — era a causa raiz do link errado.
     oai = _get_openai()
-    hint = await rag.retrieve_hint(user_text, db)
+    oracao_route: OracaoRoute = await resolve_oracao(user_text, msg.phone, db)
+
+    if oracao_route.handled:
+        hint = "Sem dica de resposta"
+    else:
+        rag = _get_rag()
+        hint = await rag.retrieve_hint(user_text, db)
 
     # ── 4. Escolher agente ──
     # Se cadastro_completo está False, verifica na Diacon antes de rotear pro cadastro.
@@ -315,6 +327,11 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
         data_atual=now_sao_paulo_formatted(),
         dica_rag=hint,
     )
+
+    # Fato já resolvido em código vai no FIM do prompt — posição de maior
+    # peso de atenção, acima de qualquer regra genérica lá do meio.
+    if oracao_route.system_note:
+        system_prompt = f"{system_prompt}\n\n---\n\n{oracao_route.system_note}\n"
 
     # ── 6. Carregar histórico ──
     history = await load_history(db, msg.phone, limit=settings.history_limit)
@@ -366,7 +383,9 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
         )
 
     # ── 12. Analytics capture ──
-    await analytics_service.capture(analytics_ctx, reply_text, tools_called, db)
+    # Tools executadas pelo pré-roteador contam como tools do turno.
+    todas_tools = oracao_route.tools_called + tools_called
+    await analytics_service.capture(analytics_ctx, reply_text, todas_tools, db)
 
     # ── 13. Atualizar ultimo_contato ──
     contact.ultimo_contato = datetime.now(UTC)
