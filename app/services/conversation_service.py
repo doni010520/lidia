@@ -44,6 +44,40 @@ def now_sao_paulo_formatted() -> str:
     return f"{dia_semana}, {now.day:02d} de {mes} de {now.year} {now.hour:02d}:{now.minute:02d}"
 
 
+def stamp_past_messages(entries: list[dict], *, now: datetime | None = None) -> list[dict]:
+    """Carimba `[dd/mm]` no conteúdo das mensagens de dias anteriores.
+
+    O formato de chat da OpenAI não carrega data: o histórico chega ao modelo
+    como se tudo tivesse sido dito agora. Uma resposta antiga da Diacon
+    ("Não temos GAS de 23/08. A mais recente é a de 09/08") passa a valer como
+    fato do momento, e o modelo repete em vez de consultar de novo — mas
+    disponibilidade de material muda com o tempo (28/08/2026: o GAS já estava
+    publicado; a negativa veio do histórico de 3 dias antes, sem chamar a tool).
+
+    Consome a chave interna `_created_at` — a OpenAI rejeita chave desconhecida.
+    """
+    now = now or datetime.now(_SP_TZ)
+    hoje = now.astimezone(_SP_TZ).date()
+
+    for e in entries:
+        created = e.pop("_created_at", None)
+        content = e.get("content")
+        if created is None or not isinstance(content, str) or not content:
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        dia = created.astimezone(_SP_TZ).date()
+        if dia >= hoje:
+            continue
+        carimbo = (
+            f"[{dia.day:02d}/{dia.month:02d}]" if dia.year == hoje.year
+            else f"[{dia.day:02d}/{dia.month:02d}/{dia.year}]"
+        )
+        if not content.startswith(carimbo):
+            e["content"] = f"{carimbo} {content}"
+    return entries
+
+
 # ── Singletons (inicializados no primeiro uso) ──
 
 _rag: RAGService | None = None
@@ -133,6 +167,7 @@ async def load_history(
             entry["tool_calls"] = row.tool_calls_json
         if row.tool_name:
             entry["name"] = row.tool_name
+        entry["_created_at"] = row.created_at  # consumido por stamp_past_messages
         raw.append(entry)
 
     # ── Sanitização: OpenAI rejeita tool órfão ou assistant pendente ──
@@ -189,7 +224,9 @@ async def load_history(
                     continue
             i -= 1
 
-    return sanitized
+    # Devolve a noção de "quando" que o formato de chat não tem: sem isso,
+    # resposta de dias atrás é lida pelo modelo como fato de agora.
+    return stamp_past_messages(sanitized)
 
 
 async def save_message(
