@@ -27,7 +27,9 @@ O LLM continua no comando da resposta — mas recebe o fato já resolvido.
 """
 from __future__ import annotations
 
+import json
 import unicodedata
+import uuid
 from dataclasses import dataclass, field
 
 from loguru import logger
@@ -88,6 +90,11 @@ _MURAL = (
     "oracao de hoje",
     "calendario de oracao",
     "calendario da oracao",
+    # "oração diária" é como boa parte das pessoas chama o mural. Sem estas
+    # duas entradas a frase sozinha ("oração diária") escapava do roteador e
+    # caía no LLM, que a tratava como coisa que não tem e encaminhava.
+    "oracao diaria",
+    "calendario diario",
     "motivo de oracao",
     "motivo da oracao",
     "tema de oracao",
@@ -177,11 +184,56 @@ class OracaoRoute:
     system_note    → bloco autoritativo anexado ao final do system prompt
     tools_called   → nomes de tools executadas em código (para analytics)
     suppress_tools → tools a REMOVER da lista oferecida ao LLM neste turno
+    transcript     → o que foi executado em código, no formato de mensagem
+                     da OpenAI (par assistant+tool), para entrar no histórico
     """
     handled: bool = False
     system_note: str = ""
     tools_called: list[str] = field(default_factory=list)
     suppress_tools: list[str] = field(default_factory=list)
+    transcript: list[dict] = field(default_factory=list)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Transcrição
+# ──────────────────────────────────────────────────────────────────────
+
+def _transcrever(tool_name: str, arguments: dict, resultado: str) -> list[dict]:
+    """Descreve uma execução feita em código como o loop de tools a descreveria.
+
+    Sem isso o roteador agia sem deixar rastro: o envio acontecia fora do
+    loop de tools e nada era gravado em `lidia.messages`. No dia seguinte a
+    LidIA lia o próprio histórico, via o pedido da pessoa e a sua resposta, e
+    nenhuma linha dizendo que o mural tinha saído — então tratava o pedido
+    como não atendido e "encaminhava novamente".
+
+    Devolver o par no formato da OpenAI faz um turno resolvido em código
+    ficar indistinguível de um turno resolvido pelo LLM, tanto para o modelo
+    quanto para quem for auditar a conversa depois.
+    """
+    call_id = f"call_router_{uuid.uuid4().hex[:16]}"
+    return [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": json.dumps(arguments, ensure_ascii=False),
+                    },
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": tool_name,
+            "content": resultado,
+        },
+    ]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -268,6 +320,8 @@ async def resolve(
         log.exception("oracao_router: falha inesperada ao executar oracao_do_dia")
         ok, resultado = False, "erro inesperado ao gerar o link."
 
+    transcript = _transcrever("oracao_do_dia", {"telefone": phone}, resultado)
+
     # ── Falha: NADA chegou na pessoa ──
     # A tool fica FORA de suppress_tools de propósito: o LLM precisa poder
     # tentar de novo. E o note não pode afirmar que enviou.
@@ -286,13 +340,29 @@ async def resolve(
                 "`oracao_do_dia` uma única vez para tentar novamente."
             ),
             tools_called=["oracao_do_dia"],
+            transcript=transcript,
         )
 
     # ── Sucesso ──
-    # `suppress_tools` tira a tool da lista deste turno. Sem isso o modelo
-    # chamava `oracao_do_dia` de novo mesmo com o aviso escrito no prompt, e a
-    # pessoa recebia o mural DUPLICADO — com dois links autenticados distintos.
-    # Aviso no prompt é pedido; tirar da lista é garantia.
+    # `suppress_tools` tira as tools da lista deste turno. Aviso no prompt é
+    # pedido; tirar da lista é garantia. Saem duas, por motivos diferentes —
+    # os dois observados em produção:
+    #
+    # `oracao_do_dia`: sem isso o modelo chamava de novo mesmo com o aviso
+    #   escrito no prompt, e a pessoa recebia o mural DUPLICADO, com dois
+    #   links autenticados distintos.
+    #
+    # `notificar_time_interno`: é o efeito colateral de tirar `oracao_do_dia`
+    #   da lista. O modelo procura a ferramenta do mural, não acha, e cai na
+    #   regra genérica do prompt ("não consegui atender → encaminhe para a
+    #   equipe"). Em 09/09 a pessoa recebeu o card com o link e leu, no mesmo
+    #   turno, "já encaminhei sua solicitação para a equipe de oração para que
+    #   enviem o link do calendário de oração diário": o link na mão e a
+    #   resposta dizendo que não tem. Nos turnos em que a frase final saía
+    #   certa ("Mandei aqui pra você"), a chamada acontecia mesmo assim — a
+    #   equipe de Oração levava um chamado falso a cada pedido de mural.
+    #   Não há o que encaminhar num turno em que a entrega já foi feita: o
+    #   roteador só assume o turno quando a mensagem É o pedido do mural.
     return OracaoRoute(
         handled=True,
         system_note=(
@@ -300,11 +370,18 @@ async def resolve(
             "O mural da oração do dia JÁ FOI ENVIADO para a pessoa por outra "
             "mensagem, junto com os horários e links das Alvoradas. Retorno da "
             f"operação: {resultado}\n\n"
+            "\"Calendário de oração\", \"calendário de oração diário\", "
+            "\"mural\", \"card\" e \"link de oração\" são todos ESTA MESMA coisa "
+            "que acabou de ser entregue. Não existe outro calendário de oração "
+            "para pedir a ninguém.\n\n"
             "Sua resposta agora é APENAS uma frase curta e acolhedora "
             "confirmando o envio — algo como \"Mandei aqui pra você 🙏\". "
             "Não repita o link, não descreva o conteúdo, não faça perguntas de "
-            "escolha e não ofereça a Alvorada: ela já foi junto."
+            "escolha e não ofereça a Alvorada: ela já foi junto. NÃO chame "
+            "`notificar_time_interno` e NÃO diga que encaminhou o pedido para "
+            "equipe nenhuma: o pedido foi ATENDIDO, não encaminhado."
         ),
         tools_called=["oracao_do_dia"],
-        suppress_tools=["oracao_do_dia"],
+        suppress_tools=["oracao_do_dia", "notificar_time_interno"],
+        transcript=transcript,
     )

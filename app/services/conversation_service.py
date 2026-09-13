@@ -377,6 +377,29 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     history.append({"role": "user", "content": user_text})
     await save_message(db, msg.phone, "user", user_text)
 
+    # ── 7b. Registrar o que o pré-roteador executou em código ──
+    # O roteador agia sem deixar rastro: o envio do mural acontecia fora do
+    # loop de tools e nada era gravado. No dia seguinte a LidIA lia o próprio
+    # histórico, via o pedido e a sua resposta, e nenhuma linha dizendo que o
+    # mural tinha saído — então tratava como não atendido. Christiane pediu o
+    # link em 31/08 e em 04/09; nas duas o mural foi enviado, e na segunda a
+    # resposta foi "encaminhei NOVAMENTE seu pedido", lendo o próprio
+    # encaminhamento anterior sem enxergar entrega nenhuma.
+    #
+    # Entra DEPOIS da mensagem da pessoa (a ordem do histórico é por id) e
+    # ANTES do snapshot do passo 10, para não ser salvo duas vezes.
+    for entry in oracao_route.transcript:
+        history.append(entry)
+        await save_message(
+            db,
+            msg.phone,
+            entry["role"],
+            entry.get("content", ""),
+            tool_call_id=entry.get("tool_call_id"),
+            tool_name=entry.get("name"),
+            tool_calls_json=entry.get("tool_calls"),
+        )
+
     # ── 8. Analytics start ──
     from app.services import analytics_service
     analytics_ctx = analytics_service.start(
