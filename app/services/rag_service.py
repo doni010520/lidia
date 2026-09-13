@@ -7,6 +7,7 @@ from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
+from app.services.event_links import strip_event_links
 
 
 @dataclass
@@ -82,7 +83,11 @@ class RAGService:
         parts = []
         for i, c in enumerate(chunks, 1):
             src = f" (fonte: {c.source})" if c.source else ""
-            parts.append(f"[{i}]{src} {c.content}")
+            # Link de evento é da Diacon (buscar_evento), nunca da base escrita à
+            # mão: em 13/09 a planilha ainda anunciava "inscrições abertas" da
+            # Conferência 30 Anos três semanas depois de ela acabar, e o modelo
+            # copiou o link para quem queria a Imersão de Oração.
+            parts.append(f"[{i}]{src} {strip_event_links(c.content)}")
         return "\n\n".join(parts)
 
     async def retrieve_hint(self, user_text: str, db: AsyncSession) -> str:

@@ -434,12 +434,26 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
         return await handle_tool_call(tool_name, args, phone, db=db)
 
     history_len_before = len(history)  # snapshot ANTES do chat (chat muta history in-place)
-    reply_text, updated_history, tools_called = await oai.chat(
-        messages=history,
+
+    # Trava de links: link de evento só sai se veio da Diacon neste turno ou da
+    # mensagem da própria pessoa. Em 13/09 o modelo não chamou buscar_evento e
+    # copiou da dica o link da Conferência 30 Anos (encerrada) para quem pediu a
+    # Imersão de Oração — com "inscrição" e "evento" já exigindo ferramenta no
+    # prompt. Detalhes em app/services/event_links.py.
+    from app.services.event_links import responder_com_links_verificados
+
+    reply_text, updated_history, tools_called = await responder_com_links_verificados(
+        oai,
+        history=history,
         system_prompt=system_prompt,
         tools=tools if tools else None,
         phone=msg.phone,
         tool_handler=_tool_handler,
+        fontes_do_turno=[
+            user_text,
+            # o que o pré-roteador executou entra no histórico antes do snapshot
+            *(str(e.get("content") or "") for e in oracao_route.transcript if e.get("role") == "tool"),
+        ],
     )
 
     # ── 11. Persistir novas mensagens do tool loop ──

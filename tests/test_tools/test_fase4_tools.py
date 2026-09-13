@@ -12,70 +12,7 @@ from app.models.plano_leitura import PlanoLeitura
 
 # ── buscar_evento ──
 
-class TestBuscarEvento:
-    @pytest.mark.asyncio
-    async def test_events_found_by_name(self):
-        from app.tools.tool_modules.buscar_evento import execute
-
-        ev = EventoPaes(
-            id=1, nome="Cursilho Masculino",
-            data_inicio=date(2025, 6, 15), data_final=date(2025, 6, 17),
-            hora=time(19, 0), local="Sede PAES",
-            descricao="Retiro", valor="R$ 200",
-        )
-
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [ev]
-        mock_db.execute.return_value = mock_result
-
-        result = await execute({"nome_evento": "Cursilho"}, "5581999", mock_db)
-
-        assert "Cursilho Masculino" in result
-        assert "15/06/2025" in result
-        assert "19:00" in result
-        assert "Sede PAES" in result
-        assert "1 evento" in result
-
-    @pytest.mark.asyncio
-    async def test_events_found_by_date_range(self):
-        from app.tools.tool_modules.buscar_evento import execute
-
-        ev1 = EventoPaes(id=1, nome="Culto Dominical", data_inicio=date(2025, 6, 8))
-        ev2 = EventoPaes(id=2, nome="Célula", data_inicio=date(2025, 6, 10))
-
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [ev1, ev2]
-        mock_db.execute.return_value = mock_result
-
-        result = await execute(
-            {"data_inicio": "2025-06-01", "data_fim": "2025-06-30"},
-            "5581999",
-            mock_db,
-        )
-
-        assert "2 evento" in result
-        assert "Culto Dominical" in result
-        assert "Célula" in result
-
-    @pytest.mark.asyncio
-    async def test_fallback_rag_when_empty(self):
-        from app.tools.tool_modules.buscar_evento import execute
-
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-
-        with patch("app.tools.tool_modules.buscar_evento.RAGService") as MockRAG:
-            instance = MockRAG.return_value
-            instance.search = AsyncMock(return_value=[])
-            instance.format_chunks = MagicMock(return_value="Sem dica de resposta")
-
-            result = await execute({"nome_evento": "Happening"}, "5581999", mock_db)
-
-        assert "Nenhum evento encontrado" in result
+# (testes do buscar_evento: ver test_buscar_evento_diacon.py — estes eram da era do banco local)
 
 
 # ── plano_de_leitura ──

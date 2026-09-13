@@ -30,6 +30,7 @@ class OpenAIService:
         tools: list[dict] | None = None,
         phone: str = "",
         tool_handler: Any | None = None,
+        tool_choice: dict | None = None,
     ) -> tuple[str, list[dict[str, Any]], list[str]]:
         """Executa chat completion com tool-calling loop.
 
@@ -65,6 +66,10 @@ class OpenAIService:
                 }
                 if active_tools:
                     kwargs["tools"] = active_tools
+                    # Ferramenta forçada só na 1ª volta: depois do resultado o
+                    # modelo precisa poder responder, senão o loop não termina.
+                    if tool_choice and iteration == 0:
+                        kwargs["tool_choice"] = tool_choice
 
                 response = await self._client.chat.completions.create(**kwargs)
 

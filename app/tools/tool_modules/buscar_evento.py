@@ -21,7 +21,8 @@ from app.services import diacon_client
 from app.services.rag_service import RAGService
 
 _SP_TZ = ZoneInfo("America/Sao_Paulo")
-_MAX_LIMIT = 20
+_MAX_LIMIT = 500   # a Diacon devolveu 122 eventos em 90 dias (13/09/26)
+_JANELA_DIAS = 90  # teto do `to` na Diacon
 
 
 def _parse_date(s: str | None) -> date | None:
@@ -63,9 +64,16 @@ async def execute(
     if not diacon_client.is_enabled():
         return "Erro: integração Diacon não configurada."
 
-    # Buscar todos os próximos eventos (cap em 20)
+    # Janela explícita. Antes era limit=20 sem datas: cultos e reuniões enchiam
+    # a cota, a agenda acabava em 24/09 e o Cursilho de outubro "não existia" —
+    # caía no RAG e saía link velho da planilha.
+    today = datetime.now(_SP_TZ).date()
+    date_from = data_inicio or today
+    date_to = data_fim or (date_from + timedelta(days=_JANELA_DIAS))
     try:
-        data = await diacon_client.events_upcoming(limit=_MAX_LIMIT)
+        data = await diacon_client.events_upcoming(
+            limit=_MAX_LIMIT, date_from=date_from, date_to=date_to,
+        )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_evento: Diacon {e.code} {e}")
         # Fallback RAG
@@ -76,7 +84,6 @@ async def execute(
         return await _rag_fallback(nome_evento, db)
 
     # ── Filtros locais ──
-    today = datetime.now(_SP_TZ).date()
     if not data_inicio and not nome_evento:
         # Default: próximos 60 dias
         data_inicio = today
@@ -114,6 +121,7 @@ async def execute(
             "venue": ev.get("venue"),
             "description": ev.get("description_short"),
             "url": ev.get("registration_url"),
+            "has_registration": ev.get("has_registration"),
             "_date": ev_date,
             "_hora": ev_hora,
             "_end_date": ev_end_date,
@@ -139,6 +147,12 @@ async def execute(
             parts.append(f"Tipo: {ev['type']}")
         if ev["description"]:
             parts.append(f"Descrição: {ev['description']}")
+        # Dois eventos parecidos nos mesmos dias (13/09: "Imersão Céus Abertos" e
+        # "Imersão de Oração") — só um tem inscrição; é esse o link de inscrição.
+        if ev["has_registration"] is True:
+            parts.append("Inscrição: aberta")
+        elif ev["has_registration"] is False:
+            parts.append("Inscrição: não tem")
         if ev["url"]:
             parts.append(f"Link: {ev['url']}")
         lines.append(" | ".join(parts))
@@ -153,8 +167,10 @@ async def _rag_fallback(nome_evento: str, db: AsyncSession) -> str:
     rag = RAGService()
     chunks = await rag.search(query, db, top_k=5)
     if chunks:
+        # format_chunks já tira link de evento: sem a Diacon não há link a oferecer.
         return (
-            "Não encontrei eventos no calendário, mas achei na base de conhecimento:\n\n"
+            "Não encontrei esse evento na agenda da Diacon, então não tenho link de "
+            "inscrição para ele. Achei isto na base de conhecimento:\n\n"
             + rag.format_chunks(chunks)
         )
     return "Nenhum evento encontrado para os critérios informados."

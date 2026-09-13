@@ -377,9 +377,23 @@ async def registration_link(phone: str) -> dict[str, Any]:
 
 # ── Events ──
 
-async def events_upcoming(limit: int = 5) -> dict[str, Any]:
-    """GET /events/upcoming?limit="""
-    return await _request_json("GET", "events/upcoming", params={"limit": limit})
+async def events_upcoming(
+    limit: int = 5,
+    *,
+    date_from: "date | None" = None,
+    date_to: "date | None" = None,
+) -> dict[str, Any]:
+    """GET /events/upcoming?limit=&from=&to=
+
+    Sem from/to a Diacon devolve só ~30 dias. `to` vai no máximo a +90 dias
+    (medido em 13/09/26: pedido até jan/27 voltou cortado em 14/12).
+    """
+    params: dict[str, Any] = {"limit": limit}
+    if date_from:
+        params["from"] = date_from.isoformat()
+    if date_to:
+        params["to"] = date_to.isoformat()
+    return await _request_json("GET", "events/upcoming", params=params)
 
 
 # ── Check-in ──
