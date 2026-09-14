@@ -1,10 +1,11 @@
 """Tool: buscar_evento — consulta eventos do Diacon (fonte de verdade).
 
-Fluxo (Fase 1B):
-1. GET /events/upcoming → Diacon retorna próximos eventos publicados.
+Fluxo:
+1. GET /events/upcoming?from=&to= → Diacon retorna os eventos da janela (até 90 dias).
 2. Filtro local por nome (ILIKE-like, normalizado) se nome_evento veio.
 3. Filtro local por janela de data se data_inicio/data_fim vieram.
-4. Se vazio → fallback RAG.
+4. Se vazio → "não está na agenda". Sem fallback para a base de conhecimento:
+   evento é só da Diacon.
 
 A Diacon ainda não expõe filtros server-side de data/nome,
 então fazemos no cliente. Quando ela expor, simplifica.
@@ -18,7 +19,6 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import diacon_client
-from app.services.rag_service import RAGService
 
 _SP_TZ = ZoneInfo("America/Sao_Paulo")
 _MAX_LIMIT = 500   # a Diacon devolveu 122 eventos em 90 dias (13/09/26)
@@ -76,12 +76,15 @@ async def execute(
         )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_evento: Diacon {e.code} {e}")
-        # Fallback RAG
-        return await _rag_fallback(nome_evento, db)
+        return (
+            "Não consegui consultar a agenda da Diacon agora. Não tenho como confirmar "
+            "data, horário, local ou link — peça para a pessoa tentar de novo em alguns "
+            "minutos ou falar com a Secretaria."
+        )
 
     eventos = data.get("events", []) or []
     if not eventos:
-        return await _rag_fallback(nome_evento, db)
+        return _fora_da_agenda(nome_evento, date_from, date_to)
 
     # ── Filtros locais ──
     if not data_inicio and not nome_evento:
@@ -128,7 +131,7 @@ async def execute(
         })
 
     if not filtered:
-        return await _rag_fallback(nome_evento, db)
+        return _fora_da_agenda(nome_evento, date_from, date_to)
 
     # ── Formatação ──
     lines = []
@@ -160,17 +163,16 @@ async def execute(
     return f"Encontrados {len(filtered)} evento(s):\n\n" + "\n\n".join(lines)
 
 
-async def _rag_fallback(nome_evento: str, db: AsyncSession) -> str:
-    """Quando Diacon não retorna nada útil, tenta RAG."""
-    query = f"evento {nome_evento}" if nome_evento else "eventos programação PAES"
-    logger.debug(f"buscar_evento: Diacon vazio, fallback RAG '{query}'")
-    rag = RAGService()
-    chunks = await rag.search(query, db, top_k=5)
-    if chunks:
-        # format_chunks já tira link de evento: sem a Diacon não há link a oferecer.
+def _fora_da_agenda(nome_evento: str, date_from: date, date_to: date) -> str:
+    """Evento é só da Diacon: sem fallback para a base de conhecimento.
+
+    O fallback RAG devolvia agenda velha — link da Conferência 30 Anos já
+    encerrada (11/09) e horário errado da Imersão vindo das fichas do n8n (13/09).
+    """
+    periodo = f"entre {date_from.strftime('%d/%m/%Y')} e {date_to.strftime('%d/%m/%Y')}"
+    if nome_evento:
         return (
-            "Não encontrei esse evento na agenda da Diacon, então não tenho link de "
-            "inscrição para ele. Achei isto na base de conhecimento:\n\n"
-            + rag.format_chunks(chunks)
+            f"'{nome_evento}' não está na agenda da Diacon {periodo}. "
+            "Não tenho data, horário, local nem link desse evento."
         )
-    return "Nenhum evento encontrado para os critérios informados."
+    return f"Não há eventos na agenda da Diacon {periodo}."

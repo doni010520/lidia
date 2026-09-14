@@ -85,30 +85,48 @@ class TestInscricao:
         assert "Inscrição: não tem" in ceus
 
 
-class TestFallbackSemLinkVelho:
-    @pytest.mark.asyncio
-    async def test_fallback_rag_nao_devolve_link_de_evento(self, diacon):
-        # 11/09: buscar_evento sem achar na Diacon devolveu o link da
-        # Conferência 30 Anos (encerrada) vindo da planilha.
-        chunk = RAGChunk(
-            content=(
-                "Pergunta: Quando é a Conferência PAES 30 Anos?\nResposta: acontece de 19 a 22 "
-                "de agosto. As inscrições já estão abertas: https://diacon.ia.br/e/conf-30-anos-paes-08-20"
-            ),
-            source="sheets_informacoes", score=0.69,
-        )
-        with patch.object(be, "RAGService") as MockRAG:
-            MockRAG.return_value.search = AsyncMock(return_value=[chunk])
-            MockRAG.return_value.format_chunks = RAGService.__new__(RAGService).format_chunks
+class TestAgendaSoDaDiacon:
+    """Evento vem só da Diacon. Sem fallback para a base de conhecimento.
 
-            result = await be.execute({"nome_evento": "Conferência 30 anos"}, "5581", AsyncMock())
+    O fallback devolvia agenda velha: link da Conferência 30 Anos encerrada
+    (11/09) e horário errado da Imersão vindo das fichas do n8n (13/09).
+    """
 
-        assert "diacon.ia.br/e/" not in result
-        assert "Conferência PAES 30 Anos" in result
+    @pytest.fixture
+    def rag_espiao(self, monkeypatch):
+        espiao = AsyncMock(return_value=[
+            RAGChunk(content="NOME: Conferência 30 Anos PAES / DATA INICIO: 19/08/2026",
+                     source="sheets_informacoes", score=0.69),
+        ])
+        monkeypatch.setattr(RAGService, "search", espiao)
+        return espiao
 
     @pytest.mark.asyncio
-    async def test_sem_nada_em_lugar_nenhum(self, diacon):
-        with patch.object(be, "RAGService") as MockRAG:
-            MockRAG.return_value.search = AsyncMock(return_value=[])
-            result = await be.execute({"nome_evento": "Happening"}, "5581", AsyncMock())
-        assert "Nenhum evento encontrado" in result
+    async def test_evento_fora_da_agenda_nao_consulta_a_base(self, diacon, rag_espiao):
+        diacon.return_value = {"events": [
+            _ev("Culto das 10h", datetime.now(_SP).date() + timedelta(days=1), type_="Culto"),
+        ]}
+
+        result = await be.execute({"nome_evento": "Conferência 30 anos"}, "5581", AsyncMock())
+
+        rag_espiao.assert_not_awaited()
+        assert "não está na agenda" in result
+        assert "Conferência 30 Anos PAES" not in result
+
+    @pytest.mark.asyncio
+    async def test_agenda_vazia_nao_consulta_a_base(self, diacon, rag_espiao):
+        diacon.return_value = {"events": []}
+
+        result = await be.execute({"nome_evento": "Happening"}, "5581", AsyncMock())
+
+        rag_espiao.assert_not_awaited()
+        assert "não está na agenda" in result
+
+    @pytest.mark.asyncio
+    async def test_erro_na_diacon_nao_consulta_a_base(self, diacon, rag_espiao):
+        diacon.side_effect = be.diacon_client.DiaconError("timeout", status=503, code="unavailable")
+
+        result = await be.execute({"nome_evento": "Imersão de Oração"}, "5581", AsyncMock())
+
+        rag_espiao.assert_not_awaited()
+        assert "não consegui consultar a agenda" in result.lower()
