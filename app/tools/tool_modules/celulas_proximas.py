@@ -12,30 +12,104 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import diacon_client
 
-# Referência para geocoding: Recife metro area
-_GEOCODE_VIEWBOX = "-35.1,-8.2,-34.8,-7.9"  # Recife/Jaboatão region
+# Referência para geocoding: Região Metropolitana do Recife (RMR)
+_GEOCODE_VIEWBOX = "-35.1,-8.4,-34.8,-7.9"  # Recife/Jaboatão/Olinda/Paulista
+
+# Municípios da RMR que aparecem no texto do usuário. Se um deles já vier
+# escrito, NÃO forçamos "Recife" — respeitamos a cidade informada.
+_MUNICIPIOS_RMR = (
+    "jaboat",  # Jaboatão dos Guararapes
+    "olinda",
+    "paulista",
+    "camaragibe",
+    "recife",
+    "cabo",  # Cabo de Santo Agostinho
+    "abreu e lima",
+    "igarassu",
+    "moreno",
+    "ipojuca",
+    "são lourenço",
+    "sao lourenco",
+)
+
+# Bairros/localidades ambíguos que NÃO ficam em Recife. Forçar "Recife" no
+# geocoding (bug antigo) jogava a busca para o município errado ou zerava o
+# resultado. "Piedade" é o caso crítico: fica em Jaboatão dos Guararapes,
+# onde está a paróquia e a maior parte das células.
+_MUNICIPIO_POR_BAIRRO = {
+    "piedade": "Jaboatão dos Guararapes",
+    "candeias": "Jaboatão dos Guararapes",
+    "prazeres": "Jaboatão dos Guararapes",
+    "cavaleiro": "Jaboatão dos Guararapes",
+    "curado": "Jaboatão dos Guararapes",
+    "barra de jangada": "Jaboatão dos Guararapes",
+    "muribeca": "Jaboatão dos Guararapes",
+}
+
+
+def _build_queries(address: str) -> list[str]:
+    """Monta variações de busca, da mais específica para a mais genérica.
+
+    Regras:
+    - Se o usuário já citou um município da RMR, respeita a cidade e só
+      complementa com estado/país (nunca sobrepõe "Recife").
+    - Se citou um bairro ambíguo conhecido (ex.: Piedade), ancora no
+      município correto (Jaboatão) antes de cair para Recife.
+    """
+    a = address.strip().rstrip(",")
+    low = a.lower()
+    queries: list[str] = []
+
+    if any(m in low for m in _MUNICIPIOS_RMR):
+        # Já tem cidade no texto — não force outra.
+        queries.append(f"{a}, Pernambuco, Brasil")
+    else:
+        for bairro, municipio in _MUNICIPIO_POR_BAIRRO.items():
+            if bairro in low:
+                queries.append(f"{a}, {municipio}, Pernambuco, Brasil")
+                break
+        # Ainda tenta Recife (maioria dos bairros é de Recife)...
+        queries.append(f"{a}, Recife, Pernambuco, Brasil")
+        # ...e, por fim, só o estado, para pegar qualquer cidade da RMR.
+        queries.append(f"{a}, Pernambuco, Brasil")
+
+    # Dedup preservando ordem.
+    seen: set[str] = set()
+    return [q for q in queries if not (q in seen or seen.add(q))]
 
 
 async def _geocode(address: str) -> tuple[float, float] | None:
-    """Geocodifica endereço via Nominatim. Retorna (lat, lng) ou None."""
-    query = f"{address}, Recife, Pernambuco, Brasil"
+    """Geocodifica endereço via Nominatim. Retorna (lat, lng) ou None.
+
+    Tenta cada variação de query; para cada uma, primeiro com o viewbox como
+    limite rígido (bounded=1) e, se não achar, como simples viés (bounded=0),
+    para não descartar pontos na borda da RMR.
+    """
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                "https://nominatim.openstreetmap.org/search",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "limit": 1,
-                    "viewbox": _GEOCODE_VIEWBOX,
-                    "bounded": 1,
-                },
-                headers={"User-Agent": "LidIA-PAES/1.0"},
-            )
-            resp.raise_for_status()
-            results = resp.json()
-            if results:
-                return float(results[0]["lat"]), float(results[0]["lon"])
+            for query in _build_queries(address):
+                for bounded in (1, 0):
+                    resp = await client.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params={
+                            "q": query,
+                            "format": "json",
+                            "limit": 1,
+                            "countrycodes": "br",
+                            "viewbox": _GEOCODE_VIEWBOX,
+                            "bounded": bounded,
+                        },
+                        headers={"User-Agent": "LidIA-PAES/1.0"},
+                    )
+                    resp.raise_for_status()
+                    results = resp.json()
+                    if results:
+                        logger.info(
+                            f"celulas_proximas geocode ok: '{query}' "
+                            f"(bounded={bounded}) → "
+                            f"{results[0]['lat']},{results[0]['lon']}"
+                        )
+                        return float(results[0]["lat"]), float(results[0]["lon"])
     except Exception as e:
         logger.warning(f"celulas_proximas geocode falhou: {e}")
     return None
