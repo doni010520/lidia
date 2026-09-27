@@ -44,6 +44,7 @@ _MUNICIPIO_POR_BAIRRO = {
     "curado": "Jaboatão dos Guararapes",
     "barra de jangada": "Jaboatão dos Guararapes",
     "muribeca": "Jaboatão dos Guararapes",
+    "paiva": "Cabo de Santo Agostinho",  # Praia do Paiva
 }
 
 
