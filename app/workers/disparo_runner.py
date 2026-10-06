@@ -161,6 +161,25 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
                     organization=snap["contato_organizacao"],
                     delay=settings.disparos_delay_seconds * 1000,
                 )
+            elif snap["tipo"] == "texto":
+                await uaz.send_text(
+                    telefone, snap["legenda"] or "",
+                    delay=settings.disparos_delay_seconds * 1000,
+                )
+            elif snap["arquivo_tipo"] == "ptt":
+                # Mensagem de voz não leva legenda: texto (se houver) vai antes
+                if snap["legenda"]:
+                    await uaz.send_text(
+                        telefone, snap["legenda"],
+                        delay=settings.disparos_delay_seconds * 1000,
+                    )
+                    await asyncio.sleep(settings.disparos_delay_seconds)
+                await uaz.send_media(
+                    number=telefone,
+                    file=snap["arquivo_url"],
+                    type="ptt",
+                    delay=settings.disparos_delay_seconds * 1000,
+                )
             else:
                 await uaz.send_media(
                     number=telefone,

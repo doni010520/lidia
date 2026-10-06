@@ -250,7 +250,7 @@ async def migrate_disparos_contato(token: str = Query(...)):
         "ALTER TABLE disparos ALTER COLUMN arquivo_url DROP NOT NULL",
         "ALTER TABLE disparos ALTER COLUMN arquivo_tipo DROP NOT NULL",
         "ALTER TABLE disparos DROP CONSTRAINT IF EXISTS ck_disparo_tipo",
-        "ALTER TABLE disparos ADD CONSTRAINT ck_disparo_tipo CHECK (tipo IN ('midia', 'contato'))",
+        "ALTER TABLE disparos ADD CONSTRAINT ck_disparo_tipo CHECK (tipo IN ('midia', 'contato', 'texto'))",
     ]
     done, errors = [], []
     async with async_session_factory() as db:

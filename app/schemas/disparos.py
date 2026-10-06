@@ -8,12 +8,13 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class DisparoCreate(BaseModel):
-    tipo: str = Field(default="midia", pattern=r"^(midia|contato)$")
-    # Mídia (tipo='midia')
+    tipo: str = Field(default="midia", pattern=r"^(midia|contato|texto)$")
+    # Mídia (tipo='midia'); 'ptt' = áudio enviado como mensagem de voz
     arquivo_url: str | None = None
-    arquivo_tipo: str | None = Field(default=None, pattern=r"^(image|document|video)$")
+    arquivo_tipo: str | None = Field(default=None, pattern=r"^(image|document|video|ptt)$")
     arquivo_nome: str | None = None
-    legenda: str = Field(min_length=1, max_length=4096)
+    # Opcional só no áudio (mensagem de voz não tem legenda; se vier, vai como texto antes)
+    legenda: str | None = Field(default=None, max_length=4096)
     # Contato (tipo='contato')
     contato_nome: str | None = Field(default=None, max_length=120)
     contato_telefone: str | None = Field(default=None, max_length=200)
@@ -26,6 +27,10 @@ class DisparoCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validar_por_tipo(self) -> "DisparoCreate":
+        self.legenda = (self.legenda or "").strip() or None
+        audio = self.tipo == "midia" and self.arquivo_tipo == "ptt"
+        if not self.legenda and not audio:
+            raise ValueError("Digite a mensagem do disparo.")
         if self.tipo == "midia":
             if not self.arquivo_url or not self.arquivo_tipo:
                 raise ValueError("Disparo de mídia exige 'arquivo_url' e 'arquivo_tipo'.")

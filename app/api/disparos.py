@@ -26,6 +26,9 @@ from app.services.disparo_service import check_lock, count_contatos
 
 router = APIRouter(prefix="/api/disparos", tags=["disparos"])
 
+# Fallback quando o navegador não manda content-type de áudio (ex.: .opus)
+_AUDIO_EXTS = (".mp3", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".oga")
+
 
 @router.get("", response_model=list[DisparoOut])
 async def list_disparos(
@@ -155,7 +158,12 @@ async def upload_arquivo(
         folder_id=folder,
     )
     url = drive_client.get_public_url(file_id)
-    tipo = drive_client.detect_uaz_type(mimetype)
+    # Áudio vai como mensagem de voz (ptt), não como documento anexado
+    nome = (file.filename or "").lower()
+    if mimetype.startswith("audio/") or nome.endswith(_AUDIO_EXTS):
+        tipo = "ptt"
+    else:
+        tipo = drive_client.detect_uaz_type(mimetype)
 
     return UploadResponse(
         arquivo_url=url,

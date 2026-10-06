@@ -47,11 +47,11 @@ class Disparo(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "arquivo_tipo IS NULL OR arquivo_tipo IN ('image', 'document', 'video')",
+            "arquivo_tipo IS NULL OR arquivo_tipo IN ('image', 'document', 'video', 'ptt')",
             name="ck_disparo_arquivo_tipo",
         ),
         CheckConstraint(
-            "tipo IN ('midia', 'contato')",
+            "tipo IN ('midia', 'contato', 'texto')",
             name="ck_disparo_tipo",
         ),
         CheckConstraint(

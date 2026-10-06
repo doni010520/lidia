@@ -41,6 +41,7 @@
       <label>Tipo de disparo</label>
       <div style="display:flex;gap:8px;">
         <button type="button" class="btn btn-primary" id="tipoMidiaBtn" onclick="setTipo('midia')">📎 Mídia + legenda</button>
+        <button type="button" class="btn btn-secondary" id="tipoTextoBtn" onclick="setTipo('texto')">💬 Só texto</button>
         <button type="button" class="btn btn-secondary" id="tipoContatoBtn" onclick="setTipo('contato')">👤 Texto + contato</button>
       </div>
     </div>
@@ -50,8 +51,8 @@
       <div class="upload-dropzone" id="uploadDropzone">
         <div style="font-size:48px;margin-bottom:12px;color:var(--accent);">&#128206;</div>
         <p>Arraste um arquivo aqui ou <span style="color:var(--accent);font-weight:500;">clique para selecionar</span></p>
-        <span class="upload-hint">Imagem, PDF ou Vídeo (max 16MB)</span>
-        <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xlsx,video/mp4" hidden>
+        <span class="upload-hint">Imagem, PDF, vídeo MP4 ou áudio (chega como mensagem de voz). Máx. 16MB</span>
+        <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xlsx,video/mp4,audio/*,.opus,.ogg,.mp3,.m4a" hidden>
       </div>
       <div class="upload-preview" id="uploadPreview" style="display:none;">
         <div class="preview-thumb" id="previewThumb"></div>
@@ -128,18 +129,40 @@ window.onAuthReady = function () {
 let selectedFile = null;
 let currentTipo = 'midia';
 
+const AUDIO_EXTS = ['.mp3', '.ogg', '.opus', '.m4a', '.aac', '.wav', '.oga'];
+function isAudio(f) {
+  if (!f) return false;
+  const n = f.name.toLowerCase();
+  return f.type.startsWith('audio/') || AUDIO_EXTS.some((e) => n.endsWith(e));
+}
+
+function atualizarLegenda() {
+  const label = document.getElementById('legendaLabel');
+  const input = document.getElementById('legendaInput');
+  if (currentTipo === 'contato') {
+    label.textContent = 'Mensagem de texto';
+    input.placeholder = 'Digite a mensagem que vai antes do contato...';
+  } else if (currentTipo === 'texto') {
+    label.textContent = 'Mensagem';
+    input.placeholder = 'Digite a mensagem...';
+  } else if (isAudio(selectedFile)) {
+    label.textContent = 'Mensagem de texto (opcional)';
+    input.placeholder = 'Se preencher, vai como texto antes do áudio...';
+  } else {
+    label.textContent = 'Legenda / mensagem';
+    input.placeholder = 'Digite a mensagem que acompanha o arquivo...';
+  }
+}
+
 function setTipo(tipo) {
   currentTipo = tipo;
-  const isMidia = tipo === 'midia';
-  document.getElementById('midiaFields').style.display = isMidia ? '' : 'none';
-  document.getElementById('contatoFields').style.display = isMidia ? 'none' : '';
-  document.getElementById('legendaLabel').textContent = isMidia ? 'Legenda / mensagem' : 'Mensagem de texto';
-  document.getElementById('legendaInput').placeholder = isMidia
-    ? 'Digite a mensagem que acompanha o arquivo...'
-    : 'Digite a mensagem que vai antes do contato...';
+  document.getElementById('midiaFields').style.display = tipo === 'midia' ? '' : 'none';
+  document.getElementById('contatoFields').style.display = tipo === 'contato' ? '' : 'none';
   // estilo dos botões
-  document.getElementById('tipoMidiaBtn').className = isMidia ? 'btn btn-primary' : 'btn btn-secondary';
-  document.getElementById('tipoContatoBtn').className = isMidia ? 'btn btn-secondary' : 'btn btn-primary';
+  document.getElementById('tipoMidiaBtn').className = tipo === 'midia' ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('tipoTextoBtn').className = tipo === 'texto' ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('tipoContatoBtn').className = tipo === 'contato' ? 'btn btn-primary' : 'btn btn-secondary';
+  atualizarLegenda();
 }
 
 const dz = document.getElementById('uploadDropzone');
@@ -164,7 +187,8 @@ function handleFile(f) {
   const thumb = document.getElementById('previewThumb');
   thumb.innerHTML = f.type.startsWith('image/')
     ? '<img src="' + URL.createObjectURL(f) + '">'
-    : '<span style="font-size:32px;color:var(--text-muted)">' + (f.type.includes('pdf') ? '📄' : '🎥') + '</span>';
+    : '<span style="font-size:32px;color:var(--text-muted)">' + (isAudio(f) ? '🎤' : f.type.includes('pdf') ? '📄' : '🎥') + '</span>';
+  atualizarLegenda();
 }
 
 function removeFile() {
@@ -172,6 +196,7 @@ function removeFile() {
   fi.value = '';
   dz.style.display = '';
   document.getElementById('uploadPreview').style.display = 'none';
+  atualizarLegenda();
 }
 
 async function uploadToServer(file) {
@@ -184,9 +209,10 @@ async function uploadToServer(file) {
 
 async function montarBody(enviarAgora, agendadoParaISO) {
   const legenda = document.getElementById('legendaInput').value.trim();
-  if (!legenda) { alert('Digite a mensagem.'); return null; }
+  const legendaOpcional = currentTipo === 'midia' && isAudio(selectedFile);
+  if (!legenda && !legendaOpcional) { alert('Digite a mensagem.'); return null; }
   const filtro = document.getElementById('filtroSelect').value || null;
-  const body = { tipo: currentTipo, legenda, enviar_agora: enviarAgora, filtro_status: filtro };
+  const body = { tipo: currentTipo, legenda: legenda || null, enviar_agora: enviarAgora, filtro_status: filtro };
   if (agendadoParaISO) body.agendado_para = agendadoParaISO;
 
   if (currentTipo === 'midia') {
@@ -195,7 +221,7 @@ async function montarBody(enviarAgora, agendadoParaISO) {
     body.arquivo_url = meta.arquivo_url;
     body.arquivo_tipo = meta.arquivo_tipo;
     body.arquivo_nome = meta.arquivo_nome;
-  } else {
+  } else if (currentTipo === 'contato') {
     const nome = document.getElementById('contatoNome').value.trim();
     const tel = document.getElementById('contatoTelefone').value.trim();
     if (!nome || !tel) { alert('Informe nome e telefone do contato.'); return null; }
@@ -283,7 +309,9 @@ async function loadDisparos() {
       const s = d.status === 'enviando';
       const col = d.tipo === 'contato'
         ? '👤 ' + (d.contato_nome || 'Contato')
-        : (d.arquivo_nome || d.arquivo_tipo || '—');
+        : d.tipo === 'texto'
+          ? '💬 Só texto'
+          : (d.arquivo_tipo === 'ptt' ? '🎤 ' : '') + (d.arquivo_nome || d.arquivo_tipo || '—');
       return '<tr><td>' + dt + '</td><td>' + col + '</td>'
         + '<td><span class="legenda-truncated" title="' + (d.legenda || '').replace(/"/g, '&quot;') + '">'
         + (d.legenda || '').slice(0, 50) + '</span></td>'

@@ -88,10 +88,12 @@ class TestLoopEnvio:
             patch("app.workers.disparo_runner.async_session_factory") as mock_sf,
             patch("app.workers.disparo_runner.get_uaz_client", return_value=mock_uaz),
             patch("app.workers.disparo_runner.fetch_contatos", new_callable=AsyncMock, return_value=contatos),
-            patch("app.workers.disparo_runner.is_business_hours", return_value=True),
+            patch("app.workers.disparo_runner.dentro_da_janela", return_value=True),
             patch("app.workers.disparo_runner.settings", MagicMock(
                 disparos_business_hours_enabled=True,
                 disparos_delay_seconds=0,
+                disparos_intervalo_min_seconds=0,
+                disparos_intervalo_max_seconds=0,
             )),
             patch("app.workers.disparo_runner.asyncio") as mock_asyncio,
         ):
@@ -143,10 +145,12 @@ class TestLoopEnvio:
             patch("app.workers.disparo_runner.async_session_factory") as mock_sf,
             patch("app.workers.disparo_runner.get_uaz_client", return_value=mock_uaz),
             patch("app.workers.disparo_runner.fetch_contatos", new_callable=AsyncMock, return_value=contatos),
-            patch("app.workers.disparo_runner.is_business_hours", return_value=True),
+            patch("app.workers.disparo_runner.dentro_da_janela", return_value=True),
             patch("app.workers.disparo_runner.settings", MagicMock(
                 disparos_business_hours_enabled=True,
                 disparos_delay_seconds=0,
+                disparos_intervalo_min_seconds=0,
+                disparos_intervalo_max_seconds=0,
             )),
             patch("app.workers.disparo_runner.asyncio") as mock_asyncio,
         ):
@@ -186,17 +190,19 @@ class TestLoopEnvio:
         mock_db = AsyncMock()
         mock_db.get.return_value = disparo
         mock_db.add = MagicMock()
-        # Log já existe para este contato
-        mock_db.scalar.return_value = MagicMock(spec=DisparoLog)
+        # Contadores (enviados, falhas) zerados; log já existe para este contato
+        mock_db.scalar.side_effect = [0, 0, MagicMock(spec=DisparoLog)]
 
         with (
             patch("app.workers.disparo_runner.async_session_factory") as mock_sf,
             patch("app.workers.disparo_runner.get_uaz_client", return_value=mock_uaz),
             patch("app.workers.disparo_runner.fetch_contatos", new_callable=AsyncMock, return_value=contatos),
-            patch("app.workers.disparo_runner.is_business_hours", return_value=True),
+            patch("app.workers.disparo_runner.dentro_da_janela", return_value=True),
             patch("app.workers.disparo_runner.settings", MagicMock(
                 disparos_business_hours_enabled=True,
                 disparos_delay_seconds=0,
+                disparos_intervalo_min_seconds=0,
+                disparos_intervalo_max_seconds=0,
             )),
             patch("app.workers.disparo_runner.asyncio") as mock_asyncio,
         ):
