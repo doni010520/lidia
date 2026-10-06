@@ -51,7 +51,7 @@ class TestJanelaDaAgenda:
         result = await be.execute({"nome_evento": "Cursilho Masculino"}, "5581", AsyncMock())
 
         kw = diacon.await_args.kwargs
-        assert kw["date_from"] == hoje
+        assert kw["date_from"] == hoje - timedelta(days=be._FOLGA_INICIO_DIAS)
         assert kw["date_to"] == hoje + timedelta(days=90)
         assert kw["limit"] >= 200
         assert "Cursilho Masculino" in result
@@ -62,8 +62,41 @@ class TestJanelaDaAgenda:
         await be.execute({"data_inicio": "2026-11-01", "data_fim": "2026-11-30"}, "5581", AsyncMock())
 
         kw = diacon.await_args.kwargs
-        assert kw["date_from"] == date(2026, 11, 1)
+        assert kw["date_from"] == date(2026, 11, 1) - timedelta(days=be._FOLGA_INICIO_DIAS)
         assert kw["date_to"] == date(2026, 11, 30)
+
+
+class TestEventoEmAndamento:
+    @pytest.mark.asyncio
+    async def test_evento_que_comecou_ontem_aparece_hoje(self, diacon):
+        # 06/10: Seminário sobre Sexualidade (05 a 08/10). A Diacon filtra pelo
+        # início, então pedido de "hoje" não trazia o evento que começou ontem.
+        hoje = datetime.now(_SP).date()
+        ev = _ev("Seminário sobre Sexualidade - AVALANCHE", hoje - timedelta(days=1))
+        ev["ends_at"] = f"{(hoje + timedelta(days=2)).isoformat()}T23:00:00-03:00"
+        diacon.return_value = {"events": [ev]}
+
+        result = await be.execute(
+            {"data_inicio": hoje.isoformat(), "data_fim": hoje.isoformat(),
+             "nome_evento": "Sexualidade"},
+            "5581", AsyncMock(),
+        )
+
+        assert diacon.await_args.kwargs["date_from"] < hoje
+        assert "Seminário sobre Sexualidade" in result
+
+    @pytest.mark.asyncio
+    async def test_busca_por_nome_nao_traz_evento_encerrado(self, diacon):
+        hoje = datetime.now(_SP).date()
+        diacon.return_value = {"events": [
+            _ev("Cursilho Feminino", hoje - timedelta(days=20)),
+            _ev("Cursilho Masculino", hoje + timedelta(days=10)),
+        ]}
+
+        result = await be.execute({"nome_evento": "Cursilho"}, "5581", AsyncMock())
+
+        assert "Cursilho Masculino" in result
+        assert "Cursilho Feminino" not in result
 
 
 class TestInscricao:

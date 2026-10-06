@@ -23,6 +23,7 @@ from app.services import diacon_client
 _SP_TZ = ZoneInfo("America/Sao_Paulo")
 _MAX_LIMIT = 500   # a Diacon devolveu 122 eventos em 90 dias (13/09/26)
 _JANELA_DIAS = 90  # teto do `to` na Diacon
+_FOLGA_INICIO_DIAS = 60  # pega eventos em andamento que começaram antes da janela
 
 
 def _parse_date(s: str | None) -> date | None:
@@ -70,9 +71,15 @@ async def execute(
     today = datetime.now(_SP_TZ).date()
     date_from = data_inicio or today
     date_to = data_fim or (date_from + timedelta(days=_JANELA_DIAS))
+    # A Diacon filtra pelo INÍCIO do evento: evento de vários dias que começou
+    # antes de `from` não volta (06/10: Seminário sobre Sexualidade 05-08/10
+    # "não estava na agenda" de 06/10). Pede com folga pra trás; o filtro local
+    # por intersecção decide o que vale.
     try:
         data = await diacon_client.events_upcoming(
-            limit=_MAX_LIMIT, date_from=date_from, date_to=date_to,
+            limit=_MAX_LIMIT,
+            date_from=date_from - timedelta(days=_FOLGA_INICIO_DIAS),
+            date_to=date_to,
         )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_evento: Diacon {e.code} {e}")
@@ -91,6 +98,11 @@ async def execute(
         # Default: próximos 60 dias
         data_inicio = today
         data_fim = today + timedelta(days=60)
+    elif not data_inicio:
+        # Busca só por nome: a folga trouxe eventos já encerrados; fica só o
+        # que ainda não terminou.
+        data_inicio = today
+        data_fim = date_to
 
     norm_query = _normalize(nome_evento) if nome_evento else ""
 
