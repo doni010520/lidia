@@ -77,6 +77,16 @@ class OpenAIService:
                 log.error(f"OpenAI API error: {exc}")
                 return self._fallback_message(), messages, tools_called
 
+            # Medição do cache de prompt; nunca pode derrubar a resposta
+            try:
+                usage = response.usage
+                cached = int(usage.prompt_tokens_details.cached_tokens or 0)
+                prompt = int(usage.prompt_tokens)
+                pct = round(100 * cached / prompt) if prompt else 0
+                log.info(f"LLM cache: {cached}/{prompt} tokens ({pct}%), iter={iteration}")
+            except Exception:
+                pass
+
             choice = response.choices[0]
             assistant_msg = choice.message
 
