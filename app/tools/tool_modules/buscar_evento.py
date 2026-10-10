@@ -36,9 +36,12 @@ def _parse_date(s: str | None) -> date | None:
 
 
 def _normalize(s: str) -> str:
+    """Minúsculas, sem acento e pontuação vira espaço: "jiu-jitsu" casa com
+    o título "Jiu Jitsu Kids" (10/10)."""
+    import re
     import unicodedata
     s = unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode().lower()
-    return s.strip()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", s).split())
 
 
 def _parse_starts_at(s: str) -> tuple[date | None, str]:

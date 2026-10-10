@@ -99,6 +99,17 @@ class TestEventoEmAndamento:
         assert "Cursilho Feminino" not in result
 
 
+class TestNomeComPontuacao:
+    @pytest.mark.asyncio
+    async def test_jiu_jitsu_com_hifen_acha_titulo_com_espaco(self, diacon):
+        hoje = datetime.now(_SP).date()
+        diacon.return_value = {"events": [_ev("Jiu Jitsu Kids", hoje + timedelta(days=7))]}
+
+        result = await be.execute({"nome_evento": "jiu-jitsu"}, "5581", AsyncMock())
+
+        assert "Jiu Jitsu Kids" in result
+
+
 class TestInscricao:
     @pytest.mark.asyncio
     async def test_diferencia_evento_com_e_sem_inscricao(self, diacon):
