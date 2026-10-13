@@ -39,6 +39,29 @@ async def sheets_sync_hook(request: Request) -> Response:
     return Response(status_code=202)
 
 
+@router.post("/hooks/campanha/cursilho/convite")
+async def cursilho_convite(request: Request) -> Response:
+    """Envia o convite com botão pra 1 número. O ritmo do disparo fica com
+    quem chama (1 número por chamada). Autenticado por ?key=DEBUG_TOKEN."""
+    import os
+
+    from app.db import async_session_factory
+    from app.services import campanha_cursilho
+    from app.services.deps import get_uaz_client
+
+    key = request.query_params.get("key", "")
+    expected = os.getenv("DEBUG_TOKEN", "")
+    if not expected or key != expected:
+        return Response(status_code=401)
+    body = await request.json()
+    async with async_session_factory() as db:
+        resp = await campanha_cursilho.enviar_convite(
+            get_uaz_client(), db, str(body["phone"]), body.get("nome"),
+        )
+    import json
+    return Response(content=json.dumps(resp, ensure_ascii=False), media_type="application/json")
+
+
 @router.post("/webhook")
 async def webhook_handler(request: Request) -> Response:
     """Endpoint principal que recebe webhooks da uazapi v2."""
@@ -108,7 +131,19 @@ async def webhook_handler(request: Request) -> Response:
                 phone_log.exception("Erro no handoff_service")
         return Response(status_code=200)
 
-    # ── 9. Push no buffer + agendar processamento ──
+    # ── 9. Clique no botão da campanha do Cursilho → resposta fixa, sem LLM ──
+    from app.services import campanha_cursilho
+    if campanha_cursilho.eh_clique(msg.button_id):
+        from app.db import async_session_factory
+        from app.services.deps import get_uaz_client
+        async with async_session_factory() as db:
+            try:
+                await campanha_cursilho.responder_clique(get_uaz_client(), db, msg.phone)
+            except Exception:
+                phone_log.exception("Erro ao responder clique do Cursilho")
+        return Response(status_code=200)
+
+    # ── 10. Push no buffer + agendar processamento ──
     phone_log.info(f"Mensagem recebida: type={msg.media_type or 'text'}")
     from app.services.deps import get_process_callback
     await buffer.push(msg, get_process_callback())

@@ -46,6 +46,9 @@ class MessageInfo(BaseModel):
     mimetype: str | None = None
     fileName: str | None = None
 
+    # Clique em botão (/send/menu): id da opção escolhida
+    buttonOrListid: str | None = None
+
 
 class KeyInfo(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -87,6 +90,7 @@ class IncomingMessage(BaseModel):
     media_key: str | None = None
     mimetype: str | None = None
     message_id: str | None = None
+    button_id: str | None = None
     is_group: bool = False
     from_me: bool = False
     is_revoke: bool = False
@@ -219,6 +223,7 @@ def parse_webhook(payload: UAZWebhookPayload) -> IncomingMessage | None:
         media_key=media_key,
         mimetype=mimetype,
         message_id=message_id,
+        button_id=(msg.buttonOrListid or None) if msg else None,
         is_group=is_group,
         from_me=from_me,
         is_revoke=payload.notification == "REVOKE",
