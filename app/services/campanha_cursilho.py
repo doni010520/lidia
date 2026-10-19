@@ -6,7 +6,7 @@
 
 Rodadas:
 - "video" (13-14/10): "Quero saber" → vídeo do Bispo com o convite e o link.
-- "texto" (19/10): "Quero ver" → texto da série Igreja em Movimento com o link.
+- "texto" (19/10): "Quero ver" → cartaz com o texto da série Igreja em Movimento e o link.
 
 As duas etapas vão pro histórico (`messages`), então se a pessoa responder
 digitando em vez de clicar, a LidIA sabe do que se trata.
@@ -31,6 +31,7 @@ class Rodada:
     convite: str  # {nome} = primeiro nome
     resposta: str
     video_url: str | None = None
+    imagem_url: str | None = None
 
 
 RODADAS: dict[str, Rodada] = {
@@ -73,6 +74,7 @@ RODADAS: dict[str, Rodada] = {
             "Segue o link para inscrição abaixo:\n\n"
             f"{LINK}"
         ),
+        imagem_url="https://lidia.benitechlab.com/static/campanhas/cursilho-cartaz.jpg",
     ),
 }
 
@@ -111,6 +113,8 @@ async def responder_clique(uaz: UAZClient, db: AsyncSession, phone: str, button_
     await save_message(db, phone, "user", r.botao_label)
     if r.video_url:
         await uaz.send_media(phone, r.video_url, "video", text=r.resposta)
+    elif r.imagem_url:
+        await uaz.send_media(phone, r.imagem_url, "image", text=r.resposta)
     else:
         await uaz.send_text(phone, r.resposta, link_preview=True)
     await save_message(db, phone, "assistant", r.resposta)
