@@ -57,6 +57,7 @@ async def cursilho_convite(request: Request) -> Response:
     async with async_session_factory() as db:
         resp = await campanha_cursilho.enviar_convite(
             get_uaz_client(), db, str(body["phone"]), body.get("nome"),
+            body.get("rodada", "video"),
         )
     import json
     return Response(content=json.dumps(resp, ensure_ascii=False), media_type="application/json")
@@ -138,7 +139,7 @@ async def webhook_handler(request: Request) -> Response:
         from app.services.deps import get_uaz_client
         async with async_session_factory() as db:
             try:
-                await campanha_cursilho.responder_clique(get_uaz_client(), db, msg.phone)
+                await campanha_cursilho.responder_clique(get_uaz_client(), db, msg.phone, msg.button_id)
             except Exception:
                 phone_log.exception("Erro ao responder clique do Cursilho")
         return Response(status_code=200)
