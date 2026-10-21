@@ -42,6 +42,7 @@ from app.tools.tool_modules import (
     pedido_oracao,
     plano_de_leitura,
     qr_celula,
+    relatorio_celulas,
     resposta_oracao,
     resumo_celula,
     treinamento_lidia,
@@ -74,6 +75,7 @@ _HANDLERS: dict[str, Any] = {
     "minha_caminhada": minha_caminhada,
     "panorama_igreja": panorama_igreja,
     "resumo_celula": resumo_celula,
+    "relatorio_celulas": relatorio_celulas,
     # ── Diacon (materiais + inscrições) ──
     "buscar_material": buscar_material,
     "minha_inscricao": minha_inscricao,

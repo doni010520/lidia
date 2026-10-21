@@ -35,6 +35,7 @@ TOOLS_ALLOWED: list[str] = [
     "minha_caminhada",
     "panorama_igreja",
     "resumo_celula",
+    "relatorio_celulas",
     # ── Diacon (materiais + inscrições) ──
     "buscar_material",
     "minha_inscricao",

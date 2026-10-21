@@ -284,6 +284,40 @@ async def cells_summary_pdf(
         return resp.content, None
 
 
+async def cells_report(
+    phone: str, *, periodo: dict[str, Any] | None = None,
+    celula: str | None = None, pdf: bool = False,
+) -> tuple[dict[str, Any] | None, bytes]:
+    """GET /cells/report — relatório de encontros de um período (líder,
+    supervisor, coordenador). `periodo`: mes | dias | de+ate (ou nada = 60 dias).
+
+    Devolve (json, b"") em texto, ou (None, pdf_bytes) em PDF.
+    400 com `celulas` (nome não casou) volta como (payload, b"") — o chamador
+    mostra as opções. Levanta DiaconError em 403/429/outros.
+    """
+    if not _enabled():
+        raise DiaconError("Diacon não configurado")
+    params: dict[str, Any] = {"phone": phone, **(periodo or {})}
+    if celula:
+        params["celula"] = celula
+    if pdf:
+        params["format"] = "pdf"
+    async with httpx.AsyncClient(timeout=settings.diacon_timeout_seconds) as client:
+        resp = await client.get(f"{_base_url()}/cells/report", headers=_headers(), params=params)
+    ctype = resp.headers.get("content-type", "")
+    if resp.status_code == 400 and "application/json" in ctype:
+        try:
+            body = resp.json()
+        except Exception:
+            body = {}
+        if body.get("celulas"):
+            return body, b""
+    _raise_for_status(resp, endpoint="GET cells/report")
+    if pdf and "application/pdf" in ctype:
+        return None, resp.content
+    return resp.json(), b""
+
+
 # ── Documentos (materiais: lição, GAS, material de evento) ──
 
 async def documents_types() -> dict[str, Any]:

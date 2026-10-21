@@ -449,6 +449,48 @@ RESUMO_CELULA: dict[str, Any] = {
     },
 }
 
+RELATORIO_CELULAS: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "relatorio_celulas",
+        "description": (
+            "Relatório de encontros de um PERÍODO das células que a pessoa acompanha "
+            "(líder, supervisor ou coordenador — estes recebem todas as células abaixo "
+            "deles). Use para: 'como foram os encontros da minha célula?', 'quantos "
+            "visitantes tivemos em setembro?', 'relatório das células da minha "
+            "supervisão/coordenação', 'me manda em PDF com os nomes'. Diferente do "
+            "resumo_celula (que é UM encontro). Passe só UM período: 'mes' OU 'dias' OU "
+            "'de'+'ate'; sem período = últimos 60 dias."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "telefone": {"type": "string", "description": "Telefone de quem pede"},
+                "mes": {
+                    "type": "string",
+                    "description": (
+                        "'este_mes', 'mes_passado' ou 'AAAA-MM' (ex.: setembro de 2026 = "
+                        "'2026-09'). Para 'mês passado' use 'mes_passado', não calcule a data."
+                    ),
+                },
+                "dias": {"type": "integer", "description": "Últimos N dias (ex.: 'últimos 15 dias' = 15)"},
+                "de": {"type": "string", "description": "Início do intervalo, AAAA-MM-DD (junto com 'ate')"},
+                "ate": {"type": "string", "description": "Fim do intervalo, AAAA-MM-DD"},
+                "celula": {
+                    "type": "string",
+                    "description": "Parte do nome da célula, só se a pessoa pediu uma célula específica",
+                },
+                "formato": {
+                    "type": "string",
+                    "enum": ["texto", "pdf"],
+                    "description": "'pdf' SÓ quando a pessoa pedir PDF/arquivo ou os NOMES de quem veio; senão 'texto'",
+                },
+            },
+            "required": ["telefone"],
+        },
+    },
+}
+
 LINK_FOTO_PERFIL: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -607,6 +649,7 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "minha_caminhada": MINHA_CAMINHADA,
     "panorama_igreja": PANORAMA_IGREJA,
     "resumo_celula": RESUMO_CELULA,
+    "relatorio_celulas": RELATORIO_CELULAS,
     # ── Diacon (materiais + inscrições) ──
     "buscar_material": BUSCAR_MATERIAL,
     "minha_inscricao": MINHA_INSCRICAO,
