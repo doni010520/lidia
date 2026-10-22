@@ -416,13 +416,17 @@ async def events_upcoming(
     *,
     date_from: "date | None" = None,
     date_to: "date | None" = None,
+    phone: str | None = None,
 ) -> dict[str, Any]:
-    """GET /events/upcoming?limit=&from=&to=
+    """GET /events/upcoming?limit=&from=&to=&phone=
 
-    Sem from/to a Diacon devolve só ~30 dias. `to` vai no máximo a +90 dias
-    (medido em 13/09/26: pedido até jan/27 voltou cortado em 14/12).
+    Sem from/to a Diacon devolve só ~30 dias. `to` vai no máximo a from+92 dias.
+    `phone` (do remetente) decide a visibilidade: desconhecido vê só públicos,
+    membro vê internos, dono vê privados. Vai SEMPRE, vazio quando não há
+    remetente: sem o parâmetro a Diacon vai passar a devolver só públicos
+    (guia seção 10, 22/10/26).
     """
-    params: dict[str, Any] = {"limit": limit}
+    params: dict[str, Any] = {"limit": min(limit, 300), "phone": phone or ""}
     if date_from:
         params["from"] = date_from.isoformat()
     if date_to:

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services import diacon_client
 
 _SP_TZ = ZoneInfo("America/Sao_Paulo")
-_MAX_LIMIT = 500   # a Diacon devolveu 122 eventos em 90 dias (13/09/26)
+_MAX_LIMIT = 300   # teto da Diacon (guia 22/10/26); 90 dias deram 112-170 eventos
 _JANELA_DIAS = 90  # teto do `to` na Diacon
 _FOLGA_INICIO_DIAS = 60  # pega eventos em andamento que começaram antes da janela
 
@@ -83,7 +83,7 @@ async def execute(
     # "Semana da Virada" de 30/11 "não estava na agenda").
     try:
         data = await diacon_client.events_upcoming(
-            limit=_MAX_LIMIT, date_from=date_from, date_to=date_to,
+            limit=_MAX_LIMIT, date_from=date_from, date_to=date_to, phone=phone,
         )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_evento: Diacon {e.code} {e}")
@@ -98,6 +98,7 @@ async def execute(
             limit=_MAX_LIMIT,
             date_from=date_from - timedelta(days=_FOLGA_INICIO_DIAS),
             date_to=date_from - timedelta(days=1),
+            phone=phone,
         )
         vistos = {(ev.get("title"), ev.get("starts_at")) for ev in eventos}
         eventos += [
