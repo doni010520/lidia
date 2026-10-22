@@ -76,13 +76,14 @@ async def execute(
     date_to = data_fim or (date_from + timedelta(days=_JANELA_DIAS))
     # A Diacon filtra pelo INÍCIO do evento: evento de vários dias que começou
     # antes de `from` não volta (06/10: Seminário sobre Sexualidade 05-08/10
-    # "não estava na agenda" de 06/10). Pede com folga pra trás; o filtro local
-    # por intersecção decide o que vale.
+    # "não estava na agenda" de 06/10). Por isso há uma 2ª consulta só da folga
+    # pra trás; o filtro local por intersecção decide o que vale.
+    # As duas NÃO podem ser uma só: a Diacon corta `to` em from+90 dias, então
+    # pedir a partir de hoje-60 fazia a agenda acabar em hoje+30 (22/10: a
+    # "Semana da Virada" de 30/11 "não estava na agenda").
     try:
         data = await diacon_client.events_upcoming(
-            limit=_MAX_LIMIT,
-            date_from=date_from - timedelta(days=_FOLGA_INICIO_DIAS),
-            date_to=date_to,
+            limit=_MAX_LIMIT, date_from=date_from, date_to=date_to,
         )
     except diacon_client.DiaconError as e:
         logger.warning(f"buscar_evento: Diacon {e.code} {e}")
@@ -91,8 +92,21 @@ async def execute(
             "data, horário, local ou link — peça para a pessoa tentar de novo em alguns "
             "minutos ou falar com a Secretaria."
         )
-
     eventos = data.get("events", []) or []
+    try:
+        folga = await diacon_client.events_upcoming(
+            limit=_MAX_LIMIT,
+            date_from=date_from - timedelta(days=_FOLGA_INICIO_DIAS),
+            date_to=date_from - timedelta(days=1),
+        )
+        vistos = {(ev.get("title"), ev.get("starts_at")) for ev in eventos}
+        eventos += [
+            ev for ev in (folga.get("events") or [])
+            if (ev.get("title"), ev.get("starts_at")) not in vistos
+        ]
+    except diacon_client.DiaconError as e:
+        # Sem a folga só se perde evento em andamento; a agenda principal vale.
+        logger.warning(f"buscar_evento: folga Diacon {e.code} {e}")
     if not eventos:
         return _fora_da_agenda(nome_evento, date_from, date_to)
 

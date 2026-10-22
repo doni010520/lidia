@@ -50,8 +50,8 @@ class TestJanelaDaAgenda:
 
         result = await be.execute({"nome_evento": "Cursilho Masculino"}, "5581", AsyncMock())
 
-        kw = diacon.await_args.kwargs
-        assert kw["date_from"] == hoje - timedelta(days=be._FOLGA_INICIO_DIAS)
+        kw = diacon.await_args_list[0].kwargs
+        assert kw["date_from"] == hoje
         assert kw["date_to"] == hoje + timedelta(days=90)
         assert kw["limit"] >= 200
         assert "Cursilho Masculino" in result
@@ -61,9 +61,24 @@ class TestJanelaDaAgenda:
     async def test_periodo_pedido_vai_para_a_diacon(self, diacon):
         await be.execute({"data_inicio": "2026-11-01", "data_fim": "2026-11-30"}, "5581", AsyncMock())
 
-        kw = diacon.await_args.kwargs
-        assert kw["date_from"] == date(2026, 11, 1) - timedelta(days=be._FOLGA_INICIO_DIAS)
+        kw = diacon.await_args_list[0].kwargs
+        assert kw["date_from"] == date(2026, 11, 1)
         assert kw["date_to"] == date(2026, 11, 30)
+
+    @pytest.mark.asyncio
+    async def test_folga_nao_encurta_a_janela(self, diacon):
+        # A Diacon corta `to` em from+90. Pedir a partir de hoje-60 numa consulta
+        # só fazia a agenda acabar em hoje+30 (22/10: Semana da Virada de 30/11
+        # "não estava na agenda"). A folga é uma 2ª consulta, que termina ontem.
+        hoje = datetime.now(_SP).date()
+        await be.execute({"nome_evento": "Semana da Virada"}, "5581", AsyncMock())
+
+        principal, folga = (c.kwargs for c in diacon.await_args_list)
+        assert principal["date_from"] == hoje
+        assert principal["date_to"] == hoje + timedelta(days=90)
+        assert folga["date_from"] == hoje - timedelta(days=be._FOLGA_INICIO_DIAS)
+        assert folga["date_to"] == hoje - timedelta(days=1)
+        assert (folga["date_to"] - folga["date_from"]).days <= 90
 
 
 class TestEventoEmAndamento:

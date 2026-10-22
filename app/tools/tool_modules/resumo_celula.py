@@ -37,9 +37,15 @@ async def execute(args: dict, phone: str, db: AsyncSession) -> str:
     except diacon_client.DiaconError as e:
         logger.warning(f"resumo_celula: {e.code} {e}")
         if e.code == "forbidden":
+            # Supervisor e coordenador não lideram a célula em si: pra eles o
+            # resumo dá forbidden, mas o relatório de período funciona (22/10:
+            # Tarcisio, coordenador, ouviu "não é líder").
             return (
-                "Esse resumo é só pra líderes de célula. "
-                "Você ainda não consta como líder no sistema."
+                "Esse resumo de UM encontro é só para o líder da própria célula, e "
+                "esse telefone não consta assim. ANTES de dizer que a pessoa não tem "
+                "acesso, chame `relatorio_celulas` com o mesmo telefone: ele vale "
+                "também para supervisor e coordenador. Só diga que ela não consta "
+                "como liderança se o relatorio_celulas também negar."
             )
         if e.code == "not_found":
             return (
