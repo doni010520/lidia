@@ -19,6 +19,7 @@ TOOLS_ALLOWED: list[str] = [
     "cadastrar_contato",
     "cadastrar_aniversario",
     "atualizar_sobrenome",
+    "confirmar_membro",
     "excluir_usuario",
     "novos_convertidos",
     "PAES_listar_arquivos",

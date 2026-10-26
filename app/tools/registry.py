@@ -82,6 +82,21 @@ CADASTRAR_ANIVERSARIO: dict[str, Any] = {
     },
 }
 
+CONFIRMAR_MEMBRO: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "confirmar_membro",
+        "description": (
+            "Atualiza o cadastro DA PRÓPRIA PESSOA de visitante para membro. Use quando "
+            "ela diz que é membro mas aparece/está como visitante ('estou como "
+            "visitante', 'já sou membro', 'frequento a célula e estou como visitante'). "
+            "Antes, confirme com ela: 'Você já é membro da PAES?' — só chame depois do sim. "
+            "Não altera cargo nem liderança; não serve para cadastrar outra pessoa."
+        ),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
 ATUALIZAR_SOBRENOME: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -630,6 +645,7 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "cadastrar_contato": CADASTRAR_CONTATO,
     "cadastrar_aniversario": CADASTRAR_ANIVERSARIO,
     "atualizar_sobrenome": ATUALIZAR_SOBRENOME,
+    "confirmar_membro": CONFIRMAR_MEMBRO,
     "excluir_usuario": EXCLUIR_USUARIO,
     "novos_convertidos": NOVOS_CONVERTIDOS,
     "PAES_listar_arquivos": PAES_LISTAR_ARQUIVOS,
