@@ -598,7 +598,7 @@ BUSCAR_MATERIAL: dict[str, Any] = {
                     "description": "O que a pessoa quer (ex: 'lição', 'GAS', 'material da conferência')",
                 },
                 "telefone": {"type": "string", "description": "Telefone de quem pediu"},
-                "data": {"type": "string", "description": "Data do material (YYYY-MM-DD), opcional"},
+                "data": {"type": "string", "description": "Data do material, opcional. Passe como a pessoa disse (\"ontem\", \"domingo passado\", \"08/11\") ou YYYY-MM-DD. NUNCA calcule data relativa: a ferramenta resolve."},
                 "document_id": {
                     "type": "string",
                     "description": "ID do material, só quando a tool já pediu pra escolher entre vários",

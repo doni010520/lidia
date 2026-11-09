@@ -16,6 +16,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import diacon_client
+from app.services.datas import resolver_data
 from app.services.deps import get_uaz_client
 from app.tools.tool_modules._phone import resolve_phone
 
@@ -44,7 +45,10 @@ def _match_type(query: str, types: list[dict]) -> dict | None:
 async def execute(args: dict, phone: str, db: AsyncSession) -> str:
     target_phone = resolve_phone(args.get("telefone") or args.get("phone"), phone)
     query = (args.get("material") or args.get("assunto") or args.get("query") or "").strip()
-    date = (args.get("data") or args.get("date") or "").strip() or None
+    date_raw = (args.get("data") or args.get("date") or "").strip() or None
+    # "ontem"/"domingo passado"/"08/11" → YYYY-MM-DD em código (incidente 09/11:
+    # o modelo calculou "ontem" como 10/10). Não entendeu → manda como veio.
+    date = resolver_data(date_raw) or date_raw
     document_id = (args.get("document_id") or "").strip() or None
 
     if not target_phone:

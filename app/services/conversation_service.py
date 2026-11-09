@@ -17,6 +17,7 @@ from app.agents import lidia, lidia_cadastro
 from app.core.config import settings
 from app.models.conversation import Contact, Message
 from app.schemas.webhook import IncomingMessage
+from app.services.datas import calendario_referencia
 from app.services.deps import get_uaz_client
 from app.services.openai_service import OpenAIService
 from app.services.oracao_router import OracaoRoute, resolve as resolve_oracao
@@ -361,7 +362,7 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     system_prompt = agent_module.build_system_prompt(
         nome_usuario=contact.nome or contact.full_name or "",
         telefone=contact.telefone,
-        data_atual=now_sao_paulo_formatted(),
+        data_atual=f"{now_sao_paulo_formatted()}\n{calendario_referencia()}",
         dica_rag=hint,
     )
 
