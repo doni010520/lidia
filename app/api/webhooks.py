@@ -63,6 +63,49 @@ async def cursilho_convite(request: Request) -> Response:
     return Response(content=json.dumps(resp, ensure_ascii=False), media_type="application/json")
 
 
+@router.post("/hooks/campanha/{rodada}/disparar")
+async def campanha_disparar(rodada: str, request: Request) -> Response:
+    """Cria um disparo da campanha `rodada` (convite com botão), executado pelo
+    disparo_scheduler no servidor: janela 9–21h, retoma após reinício, não
+    repete quem já recebeu. Body opcional {"telefones": [...]} = teste só pra
+    esses; sem ele = membros ativos que aceitam receber, lidos da Diacon na
+    hora. Autenticado por ?key=DEBUG_TOKEN."""
+    import json
+    import os
+
+    from app.db import async_session_factory
+    from app.models.disparos import Disparo
+    from app.services import campanha_cursilho
+    from app.services.disparo_service import CAMPANHA_PREFIXO
+
+    key = request.query_params.get("key", "")
+    expected = os.getenv("DEBUG_TOKEN", "")
+    if not expected or key != expected:
+        return Response(status_code=401)
+    if rodada not in campanha_cursilho.RODADAS:
+        return Response(status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    telefones = [
+        "".join(ch for ch in str(t) if ch.isdigit()) for t in (body.get("telefones") or [])
+    ] or None
+    async with async_session_factory() as db:
+        d = Disparo(
+            tipo="texto",
+            status="agendado",
+            agendado_para=None,
+            filtro_status=f"{CAMPANHA_PREFIXO}{rodada}",
+            filtro_telefones=telefones,
+            created_by="campanha",
+        )
+        db.add(d)
+        await db.commit()
+        out = {"disparo_id": str(d.id), "rodada": rodada, "teste": telefones}
+    return Response(content=json.dumps(out), media_type="application/json")
+
+
 @router.post("/webhook")
 async def webhook_handler(request: Request) -> Response:
     """Endpoint principal que recebe webhooks da uazapi v2."""

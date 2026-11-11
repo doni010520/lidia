@@ -32,6 +32,27 @@ class Rodada:
     resposta: str
     video_url: str | None = None
     imagem_url: str | None = None
+    # 2º botão "Não quero receber": grava allow_contact=false na Diacon
+    # (guia Diacon §5b). Só em comunicado pra base toda.
+    com_saida: bool = False
+
+
+# Botão de saída comum a todos os comunicados. WhatsApp corta título de
+# botão acima de 20 caracteres.
+SAIR_ID = "comunicado_sair"
+SAIR_LABEL = "Não quero receber"
+_SAIR_OK = (
+    "Tudo bem{nome}! Você não vai mais receber nossos comunicados por aqui. "
+    "Se mudar de ideia, é só me avisar 🙏"
+)
+_SAIR_MANTIDA = (
+    "Você tinha pedido pra não receber pelo formulário ou pelo seu perfil, "
+    "então continua fora da lista. Pra voltar, é por lá mesmo 🙏"
+)
+_SAIR_FALHOU = (
+    "Não consegui registrar seu pedido agora. Pode clicar de novo daqui a "
+    "pouco? Desculpa o incômodo 🙏"
+)
 
 
 RODADAS: dict[str, Rodada] = {
@@ -76,6 +97,35 @@ RODADAS: dict[str, Rodada] = {
         ),
         imagem_url="https://lidia.benitechlab.com/static/campanhas/cursilho-cartaz.jpg",
     ),
+    # Devocional 2027 (nov/2026): base toda de membros que aceitam receber.
+    "devocional": Rodada(
+        botao_id="devocional_ver",
+        botao_label="Quero ver 🎁",
+        convite=(
+            "Oi, {nome}! 😊\n\n"
+            "O Arcebispo Miguel preparou um presente pra você começar 2027 com Jesus.\n\n"
+            "Quer ver?"
+        ),
+        resposta=(
+            "📖 *A cada Manhã com os Evangelhos*\n"
+            "_O devocional de 2027 do nosso querido Arcebispo Miguel Uchoa_\n\n"
+            "Que tal começar cada manhã do próximo ano com Jesus?\n\n"
+            "São *365 devocionais*, um para cada dia de 2027. Cada leitura parte de um "
+            "trecho dos Evangelhos, traz uma reflexão curta e termina com um "
+            "*\"Para lembrar\"*: uma frase para levar com você ao longo do dia.\n\n"
+            "✨ Um tema para cada mês\n"
+            "📕 Capa dura, 400 páginas\n"
+            "🎁 Um ótimo presente para a família, a célula e os amigos, natal está "
+            "chegando e é melhor que meias\n\n"
+            "Os livros ainda estão a caminho. *Reserve agora e garanta o seu.* A data "
+            "da retirada na PAES Store e/ou secretaria será divulgada assim que eles "
+            "chegarem.\n\n"
+            "👉 Reserve pelo link:\n"
+            "https://diacon.ia.br/loja/paes-catedral/p/devocional-2027-a-cada-manha-com-os-evangelhos"
+        ),
+        imagem_url="https://lidia.benitechlab.com/static/campanhas/devocional-2027.jpg",
+        com_saida=True,
+    ),
 }
 
 _POR_BOTAO = {r.botao_id: r for r in RODADAS.values()}
@@ -91,24 +141,55 @@ async def enviar_convite(
     r = RODADAS[rodada]
     primeiro = _primeiro_nome(nome)
     texto = r.convite.format(nome=primeiro) if primeiro else r.convite.replace("Oi, {nome}! ", "Oi! ")
+    choices = [f"{r.botao_label}|{r.botao_id}"]
+    if r.com_saida:
+        choices.append(f"{SAIR_LABEL}|{SAIR_ID}")
     resp = await uaz._post("/send/menu", {
         "number": phone,
         "type": "button",
         "text": texto,
-        "choices": [f"{r.botao_label}|{r.botao_id}"],
+        "choices": choices,
         "readchat": True,
     })
     await save_message(db, phone, "assistant", texto)
     await db.commit()
-    logger.bind(phone=phone).info(f"Cursilho ({rodada}): convite com botão enviado")
+    logger.bind(phone=phone).info(f"Campanha ({rodada}): convite com botão enviado")
     return resp
 
 
 def eh_clique(button_id: str | None) -> bool:
-    return button_id in _POR_BOTAO
+    return button_id in _POR_BOTAO or button_id == SAIR_ID
+
+
+async def _registrar_saida(uaz: UAZClient, db: AsyncSession, phone: str) -> None:
+    """Clique em "Não quero receber": allow_contact=false na Diacon.
+
+    Só confirma à pessoa depois do 200 (guia §5b). O _request_json já repete
+    5xx; se ainda assim falhar, pede pra ela tentar de novo.
+    """
+    from app.services import diacon_client
+
+    await save_message(db, phone, "user", SAIR_LABEL)
+    try:
+        resp = await diacon_client.member_update(phone=phone, allow_contact=False)
+        if resp.get("contact_choice") == "refusal_kept":
+            texto = _SAIR_MANTIDA
+        else:
+            nome = ((resp.get("member") or {}).get("first_name") or "").strip()
+            texto = _SAIR_OK.format(nome=f", {nome}" if nome else "")
+        logger.bind(phone=phone).info("Campanha: saída registrada (allow_contact=false)")
+    except diacon_client.DiaconError as e:
+        logger.warning(f"Campanha: falha ao registrar saída de {phone}: {e.status} {e}")
+        texto = _SAIR_FALHOU
+    await uaz.send_text(phone, texto)
+    await save_message(db, phone, "assistant", texto)
+    await db.commit()
 
 
 async def responder_clique(uaz: UAZClient, db: AsyncSession, phone: str, button_id: str) -> None:
+    if button_id == SAIR_ID:
+        await _registrar_saida(uaz, db, phone)
+        return
     r = _POR_BOTAO[button_id]
     await save_message(db, phone, "user", r.botao_label)
     if r.video_url:

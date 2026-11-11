@@ -82,6 +82,20 @@ CADASTRAR_ANIVERSARIO: dict[str, Any] = {
     },
 }
 
+PARAR_COMUNICADOS: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "parar_comunicados",
+        "description": (
+            "A PRÓPRIA pessoa pede para não receber mais comunicados/mensagens em massa da "
+            "igreja: 'não quero mais receber', 'pare de mandar', 'me tira da lista', 'sair', "
+            "'descadastrar'. Tira ela da lista de envio na Diacon. Não é para encerrar a "
+            "conversa nem para 'não quero' em resposta a uma pergunta comum."
+        ),
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+}
+
 CONFIRMAR_MEMBRO: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -646,6 +660,7 @@ ALL_TOOLS: dict[str, dict[str, Any]] = {
     "cadastrar_aniversario": CADASTRAR_ANIVERSARIO,
     "atualizar_sobrenome": ATUALIZAR_SOBRENOME,
     "confirmar_membro": CONFIRMAR_MEMBRO,
+    "parar_comunicados": PARAR_COMUNICADOS,
     "excluir_usuario": EXCLUIR_USUARIO,
     "novos_convertidos": NOVOS_CONVERTIDOS,
     "PAES_listar_arquivos": PAES_LISTAR_ARQUIVOS,

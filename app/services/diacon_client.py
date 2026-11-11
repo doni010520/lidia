@@ -194,6 +194,20 @@ async def member_update(
     return await _request_json("PATCH", "members", json_body=body)
 
 
+async def members_list(
+    *, status: str = "active", after: str | None = None, per_page: int = 200,
+) -> dict[str, Any]:
+    """GET /members?allow_contact=true — só quem aceita receber comunicado
+    (guia §5b). Paginar por `after` (não `page`): se alguém sai no meio, ninguém
+    é pulado. Retorno: {members, total, has_next, next_after}."""
+    params: dict[str, Any] = {
+        "allow_contact": "true", "status": status, "per_page": min(per_page, 200),
+    }
+    if after:
+        params["after"] = after
+    return await _request_json("GET", "members", params=params)
+
+
 async def member_photo_link(phone: str) -> dict[str, Any]:
     """POST /members/photo-link — link de uso único (30 min)."""
     return await _request_json(

@@ -20,7 +20,35 @@ from app.services.disparo_service import (
     dentro_da_janela,
     fetch_contatos,
     proxima_abertura,
+    rodada_da_campanha,
 )
+
+# Campanha com botão vai pra quem já conversa com a LidIA: intervalo menor
+# que o do painel (3–5 min, pensado pra base fria). Cursilho: 1–2 min, 0 ban.
+_CAMPANHA_INTERVALO = (60, 120)
+
+
+async def _destino_campanha(uaz, telefone: str) -> tuple[str | None, str, str | None]:
+    """Confere, NA HORA do envio, se a pessoa ainda aceita receber (guia §5b:
+    quem saiu ontem não recebe hoje) e qual o número real no WhatsApp.
+
+    Retorna (numero, primeiro_nome, motivo_pulo).
+    """
+    from app.services import diacon_client
+
+    try:
+        found = await diacon_client.member_lookup(telefone)
+    except diacon_client.DiaconError as e:
+        raise RuntimeError(f"Diacon lookup: {e}") from e
+    m = found.get("member") or {}
+    if not found.get("found") or m.get("allow_contact") is False:
+        return None, "", "não aceita receber (Diacon)"
+    check = await uaz.check_number([telefone])
+    items = check if isinstance(check, list) else (check.get("result") or [])
+    hit = next((c for c in items if c.get("isInWhatsapp")), None)
+    if not hit:
+        return None, "", "número sem WhatsApp"
+    return hit["jid"].split("@")[0], m.get("first_name") or "", None
 
 
 async def run_disparo(disparo_id: uuid.UUID) -> None:
@@ -91,6 +119,7 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
             "contato_nome": disparo.contato_nome,
             "contato_telefone": disparo.contato_telefone,
             "contato_organizacao": disparo.contato_organizacao,
+            "rodada": rodada_da_campanha(disparo),
         }
 
     if not contatos:
@@ -146,8 +175,21 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
                 continue
 
         # ── Envio (fora de qualquer sessão de banco) ──
+        pulou = False
         try:
-            if snap["tipo"] == "contato":
+            if snap["rodada"]:
+                from app.services import campanha_cursilho
+
+                numero, nome, motivo = await _destino_campanha(uaz, telefone)
+                if motivo:
+                    pulou = True
+                else:
+                    async with async_session_factory() as db:
+                        await campanha_cursilho.enviar_convite(
+                            uaz, db, numero, nome, snap["rodada"]
+                        )
+                    contato["nome"] = nome
+            elif snap["tipo"] == "contato":
                 # 1) mensagem de texto  2) cartão de contato (vCard)
                 await uaz.send_text(
                     telefone, snap["legenda"] or "",
@@ -188,9 +230,11 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
                     text=snap["legenda"],
                     delay=settings.disparos_delay_seconds * 1000,
                 )
-            log_status = "enviado"
-            erro = None
-            enviados += 1
+            if pulou:
+                log_status, erro = "pulado", motivo
+            else:
+                log_status, erro = "enviado", None
+                enviados += 1
         except Exception as e:
             log_status = "falhou"
             erro = str(e)[:500]
@@ -213,11 +257,15 @@ async def _loop_envio(disparo_id: uuid.UUID) -> None:
             await db.commit()
 
         # ── Intervalo aleatório entre pessoas (anti-ban), exceto após o último ──
-        if idx < total - 1:
-            intervalo = random.randint(
-                settings.disparos_intervalo_min_seconds,
-                settings.disparos_intervalo_max_seconds,
-            )
+        # Quem foi pulado não recebeu nada: segue sem esperar.
+        if idx < total - 1 and not pulou:
+            if snap["rodada"]:
+                intervalo = random.randint(*_CAMPANHA_INTERVALO)
+            else:
+                intervalo = random.randint(
+                    settings.disparos_intervalo_min_seconds,
+                    settings.disparos_intervalo_max_seconds,
+                )
             logger.info(f"Disparo {disparo_id}: aguardando {intervalo}s até o próximo")
             await asyncio.sleep(intervalo)
 

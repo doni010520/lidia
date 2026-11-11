@@ -130,6 +130,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         logger.info("Oracao responder agendado a cada 5min")
 
+    # ── Disparo que ficou "enviando" num reinício (deploy) volta pra fila ──
+    # Sem isso ele travava o lock global e nenhum disparo andava mais. O
+    # disparo_log impede reenvio a quem já recebeu.
+    try:
+        from sqlalchemy import update as _update
+        from app.db import async_session_factory as _sf
+        from app.models.disparos import Disparo as _Disparo
+        async with _sf() as _db:
+            r = await _db.execute(
+                _update(_Disparo)
+                .where(_Disparo.status == "enviando")
+                .values(status="agendado", agendado_para=None)
+            )
+            await _db.commit()
+            if r.rowcount:
+                logger.info(f"{r.rowcount} disparo(s) 'enviando' devolvidos à fila após reinício")
+    except Exception:
+        logger.exception("Falha ao recuperar disparos 'enviando'")
+
     # ── Disparo scheduler (a cada 1min) ──
     from app.workers.disparo_scheduler import check_scheduled_disparos
     scheduler.add_job(

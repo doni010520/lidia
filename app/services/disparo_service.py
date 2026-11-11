@@ -22,8 +22,42 @@ async def check_lock(db: AsyncSession) -> bool:
     return (count or 0) > 0
 
 
+CAMPANHA_PREFIXO = "campanha:"
+
+
+def rodada_da_campanha(disparo: Disparo) -> str | None:
+    """Disparo de campanha com botão marca `filtro_status="campanha:<rodada>"`."""
+    f = disparo.filtro_status
+    if not isinstance(f, str) or not f.startswith(CAMPANHA_PREFIXO):
+        return None
+    return f[len(CAMPANHA_PREFIXO):]
+
+
+async def _contatos_diacon() -> list[dict]:
+    """Membros ativos que aceitam receber, lidos da Diacon AGORA (guia §5b:
+    nunca de cópia guardada)."""
+    from app.services import diacon_client
+
+    contatos: list[dict] = []
+    after = None
+    while True:
+        page = await diacon_client.members_list(after=after)
+        for m in page.get("members") or []:
+            tel = "".join(ch for ch in (m.get("phone") or "") if ch.isdigit())
+            if tel:
+                contatos.append({"telefone": tel, "nome": m.get("first_name") or ""})
+        if not page.get("has_next") or not page.get("next_after"):
+            return contatos
+        after = page["next_after"]
+
+
 async def fetch_contatos(db: AsyncSession, disparo: Disparo) -> list[dict]:
     """Busca contatos elegíveis para o disparo."""
+    if rodada_da_campanha(disparo):
+        # Teste: só os telefones informados (o nome vem da Diacon no envio).
+        if disparo.filtro_telefones:
+            return [{"telefone": t, "nome": ""} for t in disparo.filtro_telefones]
+        return await _contatos_diacon()
     if disparo.filtro_telefones:
         result = await db.execute(
             select(Contact).where(Contact.telefone.in_(disparo.filtro_telefones))
