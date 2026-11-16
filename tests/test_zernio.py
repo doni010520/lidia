@@ -70,6 +70,7 @@ async def test_envio_de_texto_e_botoes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_pdf_vira_link_temporario(monkeypatch):
+    monkeypatch.setattr(zc.settings, "zernio_account_id", "acc1")
     cli = zc.ZernioClient()
     post = AsyncMock(return_value={"data": {"messageId": "z1"}})
     monkeypatch.setattr(cli, "_post_conversa", post)
@@ -79,3 +80,30 @@ async def test_pdf_vira_link_temporario(monkeypatch):
     payload, _ = post.await_args.args
     assert payload["attachmentUrl"].endswith("/qr.pdf")
     assert payload["attachmentType"] == "file" and payload["attachmentName"] == "qr.pdf" and payload["message"] == "QR"
+
+
+@pytest.mark.asyncio
+async def test_descobre_a_conta_pelo_perfil(monkeypatch):
+    monkeypatch.setattr(zc.settings, "zernio_account_id", "")
+    monkeypatch.setattr(zc.settings, "zernio_profile_id", "perfilPAES")
+    cli = zc.ZernioClient()
+    req = AsyncMock(return_value={"accounts": [
+        {"_id": "ig1", "platform": "instagram", "isActive": True},
+        {"_id": "wa1", "platform": "whatsapp", "isActive": True, "username": "+5581"},
+    ]})
+    monkeypatch.setattr(cli, "_req", req)
+    assert await cli._conta() == "wa1"
+    assert req.await_args.kwargs["params"] == {"profileId": "perfilPAES"}
+    assert await cli._conta() == "wa1" and req.await_count == 1  # guardado
+
+
+@pytest.mark.asyncio
+async def test_sem_conta_conectada_falha_e_espera_1_min(monkeypatch):
+    monkeypatch.setattr(zc.settings, "zernio_account_id", "")
+    cli = zc.ZernioClient()
+    req = AsyncMock(return_value={"accounts": []})
+    monkeypatch.setattr(cli, "_req", req)
+    for _ in range(2):
+        with pytest.raises(zc.ZernioError):
+            await cli._conta()
+    assert req.await_count == 1

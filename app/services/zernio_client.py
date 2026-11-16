@@ -55,11 +55,29 @@ class ZernioClient:
     async def _post_conversa(self, payload: dict, idem: str) -> dict:
         return await self._req("POST", "/inbox/conversations", json=payload, idem=idem)
 
+    async def _conta(self) -> str:
+        """Id da conta WhatsApp. Sem ZERNIO_ACCOUNT_ID, descobre pela conta
+        WhatsApp ativa do perfil da PAES: assim a LidIA passa a funcionar no
+        instante em que o número é conectado, sem mexer em configuração."""
+        if self.account_id:
+            return self.account_id
+        import time
+        if time.monotonic() < getattr(self, "_proxima_busca", 0):
+            raise ZernioError("Nenhuma conta WhatsApp conectada no perfil da Zernio")
+        r = await self._req("GET", "/accounts", params={"profileId": settings.zernio_profile_id})
+        contas = [a for a in r.get("accounts", []) if a.get("platform") == "whatsapp" and a.get("isActive")]
+        if not contas:
+            self._proxima_busca = time.monotonic() + 60
+            raise ZernioError("Nenhuma conta WhatsApp conectada no perfil da Zernio")
+        self.account_id = contas[0]["_id"]
+        logger.info(f"Zernio: conta WhatsApp {self.account_id} ({contas[0].get('username')})")
+        return self.account_id
+
     async def _send(self, number: str, body: dict[str, Any]) -> dict:
         """Envia para o número; a mesma Idempotency-Key em todas as tentativas
         evita mensagem duplicada quando a 1ª chegou mas a resposta se perdeu."""
         idem = body.pop("_idem", None) or str(uuid.uuid4())
-        payload = {"accountId": self.account_id, "participantId": _so_digitos(number), **body}
+        payload = {"accountId": await self._conta(), "participantId": _so_digitos(number), **body}
         r = await self._post_conversa(payload, idem)
         data = r.get("data") or r
         # Mesmo formato que o resto do código já lê da uazapi
