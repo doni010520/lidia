@@ -1,6 +1,7 @@
 """Processador de mídia — converte mídia recebida em texto para o pipeline.
 
-TODAS as funções usam uaz.download_message(message_id) para obter bytes
+TODAS as funções usam uaz.download_message(message_id, media_url=...) para obter bytes
+(uazapi decripta pelo id; Zernio baixa pela URL do webhook)
 decriptografados. Mídia do WhatsApp vem criptografada (.enc) — acessar
 a URL direta falha. O endpoint /message/download da uazapi faz o decrypt.
 
@@ -18,11 +19,11 @@ from app.core.config import settings
 from app.services.deps import get_uaz_client
 
 
-async def _download_media_bytes(message_id: str) -> bytes | None:
+async def _download_media_bytes(message_id: str, media_url: str | None = None) -> bytes | None:
     """Baixa mídia via uazapi /message/download → retorna bytes decriptografados."""
     uaz = get_uaz_client()
     try:
-        result = await uaz.download_message(message_id)
+        result = await uaz.download_message(message_id, media_url=media_url)
         file_b64 = result.get("file", "")
         if not file_b64:
             logger.warning(f"download_message sem campo 'file' para {message_id}")
@@ -33,12 +34,13 @@ async def _download_media_bytes(message_id: str) -> bytes | None:
         return None
 
 
-async def transcribe_audio(message_id: str) -> str:
+async def transcribe_audio(message_id: str, media_url: str | None = None) -> str:
     """Transcreve áudio via uazapi (Whisper integrado)."""
     uaz = get_uaz_client()
     try:
         result = await uaz.download_message(
             message_id,
+            media_url=media_url,
             transcribe=True,
             openai_apikey=settings.openai_api_key,
         )
@@ -51,9 +53,9 @@ async def transcribe_audio(message_id: str) -> str:
         return ""
 
 
-async def describe_image(message_id: str, mimetype: str | None = None) -> str:
+async def describe_image(message_id: str, mimetype: str | None = None, media_url: str | None = None) -> str:
     """Descreve imagem via GPT Vision usando base64 data URL."""
-    content = await _download_media_bytes(message_id)
+    content = await _download_media_bytes(message_id, media_url)
     if content is None:
         return "[Imagem recebida, mas não foi possível baixá-la]"
 
@@ -94,12 +96,12 @@ async def describe_image(message_id: str, mimetype: str | None = None) -> str:
         return "[Imagem recebida, mas não foi possível processá-la]"
 
 
-async def extract_document(message_id: str, mimetype: str | None = None) -> str:
+async def extract_document(message_id: str, mimetype: str | None = None, media_url: str | None = None) -> str:
     """Extrai texto de documento (PDF, DOCX, XLSX, PPTX).
 
     Baixa bytes decriptografados via uazapi e processa com lib adequada.
     """
-    content = await _download_media_bytes(message_id)
+    content = await _download_media_bytes(message_id, media_url)
     if content is None:
         return "[Documento recebido, mas não foi possível baixá-lo]"
 
@@ -174,11 +176,11 @@ async def extract_document(message_id: str, mimetype: str | None = None) -> str:
     return f"[Documento recebido (tipo: {mime}), formato não suportado para extração]"
 
 
-async def handle_video(message_id: str) -> str:
+async def handle_video(message_id: str, media_url: str | None = None) -> str:
     """Download de vídeo via uazapi → upload para Google Drive → retorna file_id."""
     from app.services import drive_client
 
-    content = await _download_media_bytes(message_id)
+    content = await _download_media_bytes(message_id, media_url)
     if content is None:
         return ""
 

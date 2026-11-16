@@ -91,6 +91,16 @@ class UAZClient:
             payload["mentions"] = mentions
         return await self._post("/send/media", payload)
 
+    async def send_buttons(self, number: str, text: str, buttons: list[tuple[str, str]]) -> dict:
+        """Botões de resposta (label, id). O clique volta em `buttonOrListid`."""
+        return await self._post("/send/menu", {
+            "number": number,
+            "type": "button",
+            "text": text,
+            "choices": [f"{label}|{bid}" for label, bid in buttons],
+            "readchat": True,
+        })
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
     async def send_contact(
         self,
@@ -174,6 +184,7 @@ class UAZClient:
         *,
         transcribe: bool = False,
         openai_apikey: str | None = None,
+        media_url: str | None = None,  # usado só pela Zernio; a uazapi decripta pelo id
     ) -> dict:
         payload: dict[str, Any] = {"id": message_id}
         if transcribe:

@@ -61,12 +61,12 @@ async def test_sem_whatsapp_e_pulado_e_numero_vem_do_jid(monkeypatch):
 @pytest.mark.asyncio
 async def test_convite_do_devocional_tem_botao_de_saida(monkeypatch):
     monkeypatch.setattr(cc, "save_message", AsyncMock())
-    uaz = MagicMock(_post=AsyncMock(return_value={}))
+    uaz = MagicMock(send_buttons=AsyncMock(return_value={}))
     await cc.enviar_convite(uaz, AsyncMock(), "5581", "Maria Silva", "devocional")
-    body = uaz._post.await_args.args[1]
-    assert body["choices"] == ["Quero ver 🎁|devocional_ver", f"{cc.SAIR_LABEL}|{cc.SAIR_ID}"]
-    assert body["text"].startswith("Oi, Maria!")
-    assert all(len(c.split("|")[0]) <= 20 for c in body["choices"])
+    _, texto, botoes = uaz.send_buttons.await_args.args
+    assert botoes == [("Quero ver 🎁", "devocional_ver"), (cc.SAIR_LABEL, cc.SAIR_ID)]
+    assert texto.startswith("Oi, Maria!")
+    assert all(len(label) <= 20 for label, _ in botoes)
 
 
 @pytest.mark.asyncio

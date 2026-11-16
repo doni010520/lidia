@@ -50,7 +50,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     buffer = BufferService()
     await buffer.connect()
 
-    uaz = UAZClient()
+    if settings.whatsapp_provider == "zernio":
+        from app.services.zernio_client import ZernioClient
+        uaz = ZernioClient()
+        logger.info("Canal de WhatsApp: Zernio (API Oficial, coexistência)")
+    else:
+        uaz = UAZClient()
+        logger.info("Canal de WhatsApp: uazapi")
 
     # Callback real — consome buffer, monta IncomingMessage, roda pipeline
     async def _process_buffered(phone: str) -> None:
@@ -91,7 +97,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.exception("Falha ao criar admin do painel")
 
     # ── uazapi chatbot settings (handoff nativo) ──
-    if settings.uaz_base_url and settings.uaz_token:
+    if settings.whatsapp_provider == "uazapi" and settings.uaz_base_url and settings.uaz_token:
         try:
             await uaz.update_chatbot_settings(
                 chatbot_enabled=True,
@@ -238,6 +244,8 @@ def create_app() -> FastAPI:
     from app.api.disparos import router as disparos_router
     from app.api.eventos import router as eventos_router
     app.include_router(webhook_router)
+    from app.api.webhook_zernio import router as zernio_router
+    app.include_router(zernio_router)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(disparos_router)

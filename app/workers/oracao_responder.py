@@ -36,6 +36,9 @@ Sempre mantenha o tom acolhedor e esperançoso."""
 
 async def check_and_send() -> int:
     """Verifica planilha de oração e envia respostas pendentes."""
+    from app.services.deps import proativos_permitidos
+    if not proativos_permitidos("oracao_responder"):
+        return 0
     sheet_id = settings.sheets_log_oracao_id
     if not sheet_id:
         return 0

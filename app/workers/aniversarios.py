@@ -171,6 +171,9 @@ async def _gerar_relatorio_pastor(
     return (resp.choices[0].message.content or "").strip()
 
 async def check_aniversariantes() -> dict[str, int]:
+    from app.services.deps import proativos_permitidos
+    if not proativos_permitidos("aniversarios"):
+        return {}
     aniversariantes = await _fetch_aniversariantes()
     if not aniversariantes:
         logger.info("Sem aniversariantes hoje.")

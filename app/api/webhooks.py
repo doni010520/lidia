@@ -134,6 +134,11 @@ async def webhook_handler(request: Request) -> Response:
         logger.warning(f"Webhook rejeitado: token mismatch ({payload.token})")
         return Response(status_code=200)
 
+    # Canal ativo é a Zernio: a uazapi pode continuar ligada na transição,
+    # e responder pelos dois canais duplicaria a resposta.
+    if settings.whatsapp_provider != "uazapi":
+        return Response(status_code=200)
+
     # ── 4. Filtrar EventType ──
     if payload.EventType != "messages":
         logger.debug(f"Evento ignorado: {payload.EventType}")

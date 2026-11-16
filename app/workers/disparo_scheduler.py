@@ -14,6 +14,9 @@ from app.services.disparo_service import is_business_hours
 
 async def check_scheduled_disparos() -> int:
     """Verifica disparos agendados e dispara os que estão na hora."""
+    from app.services.deps import proativos_permitidos
+    if not proativos_permitidos("disparo_scheduler"):
+        return 0
     async with async_session_factory() as db:
         # Lock: já tem um enviando?
         em_andamento = await db.scalar(

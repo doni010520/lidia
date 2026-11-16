@@ -42,6 +42,9 @@ async def _gerar_mensagem(nome: str, ministerio: str, client: openai.AsyncOpenAI
     return (resp.choices[0].message.content or "").strip()
 
 async def disparar_liderancas() -> dict[str, int]:
+    from app.services.deps import proativos_permitidos
+    if not proativos_permitidos("disparo_liderancas"):
+        return {}
     lideres = await _fetch_liderancas()
     if not lideres:
         logger.info("Nenhuma lideranca cadastrada.")

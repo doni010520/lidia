@@ -37,9 +37,9 @@ _DIAS_PT = {
 }
 
 
-def now_sao_paulo_formatted() -> str:
-    """Data/hora formatada em pt-BR no fuso de São Paulo."""
-    now = datetime.now(_SP_TZ)
+def now_sao_paulo_formatted(now: datetime | None = None) -> str:
+    """Data/hora formatada em pt-BR no fuso de São Paulo (`now` fixo nos evals)."""
+    now = (now or datetime.now(_SP_TZ)).astimezone(_SP_TZ)
     dia_semana = _DIAS_PT[now.weekday()]
     mes = _MESES_PT[now.month]
     return f"{dia_semana}, {now.day:02d} de {mes} de {now.year} {now.hour:02d}:{now.minute:02d}"
@@ -171,6 +171,17 @@ async def load_history(
         entry["_created_at"] = row.created_at  # consumido por stamp_past_messages
         raw.append(entry)
 
+    # Devolve a noção de "quando" que o formato de chat não tem: sem isso,
+    # resposta de dias atrás é lida pelo modelo como fato de agora.
+    return stamp_past_messages(sanitizar_historico(raw))
+
+
+def sanitizar_historico(raw: list[dict]) -> list[dict]:
+    """Tira tool órfão e assistant com tool_calls sem resposta (a OpenAI rejeita).
+
+    Separada de `load_history` para os evals (evals/) montarem o histórico
+    exatamente como a produção, a partir de uma conversa congelada.
+    """
     # ── Sanitização: OpenAI rejeita tool órfão ou assistant pendente ──
     # Regra: cada `tool` precisa ter, antes dele (em qualquer posição válida),
     # um `assistant` com `tool_calls` cuja lista contenha o tool_call_id.
@@ -225,9 +236,7 @@ async def load_history(
                     continue
             i -= 1
 
-    # Devolve a noção de "quando" que o formato de chat não tem: sem isso,
-    # resposta de dias atrás é lida pelo modelo como fato de agora.
-    return stamp_past_messages(sanitized)
+    return sanitized
 
 
 async def save_message(
@@ -271,6 +280,10 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     if not contact.ai_enabled:
         log.debug("AI desabilitada (handoff), ignorando")
         return
+    from app.services.handoff_service import ia_pausada
+    if await ia_pausada(msg.phone):
+        log.debug("IA em pausa (equipe respondeu pelo celular), ignorando")
+        return
 
     # ── 2. Processar mídia → texto ──
     from app.services import media_processor
@@ -278,23 +291,23 @@ async def process_message(msg: IncomingMessage, db: AsyncSession) -> None:
     user_text = msg.text or ""
     if msg.media_type and msg.message_id:
         if msg.media_type == "audio":
-            transcription = await media_processor.transcribe_audio(msg.message_id)
+            transcription = await media_processor.transcribe_audio(msg.message_id, msg.media_url)
             if transcription:
                 user_text = transcription + ("\n" + user_text if user_text else "")
                 log.info(f"Áudio transcrito: {transcription[:80]}...")
 
         elif msg.media_type == "image":
-            description = await media_processor.describe_image(msg.message_id, msg.mimetype)
+            description = await media_processor.describe_image(msg.message_id, msg.mimetype, msg.media_url)
             user_text = description + ("\n" + user_text if user_text else "")
             log.info("Imagem descrita via GPT Vision")
 
         elif msg.media_type == "document":
-            doc_text = await media_processor.extract_document(msg.message_id, msg.mimetype)
+            doc_text = await media_processor.extract_document(msg.message_id, msg.mimetype, msg.media_url)
             user_text = doc_text + ("\n" + user_text if user_text else "")
             log.info(f"Documento extraído ({msg.mimetype})")
 
         elif msg.media_type == "video":
-            file_id = await media_processor.handle_video(msg.message_id)
+            file_id = await media_processor.handle_video(msg.message_id, msg.media_url)
             if file_id:
                 user_text = f"[SISTEMA] Usuário enviou vídeo. drive_file_id: {file_id}\n{user_text}"
                 log.info(f"Vídeo uploaded para Drive: {file_id}")

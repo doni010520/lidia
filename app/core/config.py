@@ -22,10 +22,29 @@ class Settings(BaseSettings):
     openai_max_tokens: int = 2000
     openai_embedding_model: str = "text-embedding-3-small"
 
+    # Canal de WhatsApp: "uazapi" (antigo) ou "zernio" (API Oficial, coexistência).
+    # Trocar volta tudo pro outro canal sem deploy de código.
+    whatsapp_provider: str = "uazapi"
+
     # uazapi v2
     uaz_base_url: str = ""
     uaz_token: str = ""
     uaz_webhook_secret: str = ""
+
+    # Zernio (WhatsApp Business com coexistência)
+    zernio_base_url: str = "https://zernio.com/api/v1"
+    zernio_api_key: str = ""
+    zernio_account_id: str = ""  # _id da conta WhatsApp (GET /accounts)
+    zernio_profile_id: str = ""  # perfil "PAES - LidIA", p/ o link de conexão
+    zernio_webhook_secret: str = ""
+    # Na API Oficial, mensagem ativa fora da janela de 24h só sai por template
+    # pago. Desligado até a PAES escolher o que continua (aniversariantes,
+    # lideranças, boas-vindas, resposta de oração, disparos).
+    zernio_proativos: bool = False
+    # Chave do link fixo /conectar-whatsapp (gera link novo da Zernio a cada acesso)
+    conectar_whatsapp_key: str = ""
+    # Pausa da IA quando a equipe responde pelo celular (era recurso da uazapi)
+    pausa_humano_minutos: int = 30
 
     # Database
     database_url: str = "postgresql+asyncpg://lidia:lidia_secret@db:5432/lidia"

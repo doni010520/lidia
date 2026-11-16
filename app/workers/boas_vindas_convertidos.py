@@ -50,6 +50,9 @@ async def _remover_convertido(convertido_id: int) -> None:
         await db.commit()
 
 async def disparar_boas_vindas() -> dict[str, int]:
+    from app.services.deps import proativos_permitidos
+    if not proativos_permitidos("boas_vindas_convertidos"):
+        return {}
     convertidos = await _fetch_convertidos()
     if not convertidos:
         logger.info("Sem novos convertidos.")

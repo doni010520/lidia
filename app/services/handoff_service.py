@@ -50,3 +50,26 @@ async def handle_outgoing(msg: IncomingMessage, db: AsyncSession) -> None:
             logger.bind(phone=msg.phone).info(
                 f"AI REABILITADA (handoff encerrado: '{settings.handoff_keyword_on}')"
             )
+
+
+# ── Pausa automática quando a equipe responde pelo celular ──
+# Na uazapi era o chatbot_stopWhenYouSendMsg (nativo). Na Zernio (coexistência)
+# a resposta do celular chega como `message.sent` e a pausa é nossa.
+
+def _redis():
+    from app.services import media_temp
+    return media_temp._r()
+
+
+async def pausar_ia(phone: str, minutos: int | None = None) -> None:
+    m = settings.pausa_humano_minutos if minutos is None else minutos
+    await _redis().set(f"pausa_humano:{phone}", "1", ex=m * 60)
+    logger.bind(phone=phone).info(f"IA pausada {m} min (equipe respondeu pelo celular)")
+
+
+async def ia_pausada(phone: str) -> bool:
+    try:
+        return bool(await _redis().exists(f"pausa_humano:{phone}"))
+    except Exception:
+        logger.exception("Falha ao checar pausa da IA (seguindo sem pausa)")
+        return False

@@ -39,3 +39,18 @@ def get_uaz_client() -> UAZClient:
 def get_process_callback() -> Callable[[str], Coroutine[Any, Any, None]]:
     assert _process_callback is not None, "process_callback não registrado"
     return _process_callback
+
+
+def proativos_permitidos(origem: str) -> bool:
+    """Mensagem ativa (fora de conversa) pode sair pelo canal atual?
+
+    Na uazapi, sempre. Na Zernio (API Oficial), fora da janela de 24h a Meta
+    só aceita template aprovado e pago: fica desligado até a PAES decidir
+    (ZERNIO_PROATIVOS=true libera).
+    """
+    from loguru import logger
+    from app.core.config import settings
+    if settings.whatsapp_provider != "zernio" or settings.zernio_proativos:
+        return True
+    logger.info(f"{origem}: pulado (Zernio sem proativos liberados)")
+    return False

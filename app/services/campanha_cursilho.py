@@ -141,16 +141,10 @@ async def enviar_convite(
     r = RODADAS[rodada]
     primeiro = _primeiro_nome(nome)
     texto = r.convite.format(nome=primeiro) if primeiro else r.convite.replace("Oi, {nome}! ", "Oi! ")
-    choices = [f"{r.botao_label}|{r.botao_id}"]
+    botoes = [(r.botao_label, r.botao_id)]
     if r.com_saida:
-        choices.append(f"{SAIR_LABEL}|{SAIR_ID}")
-    resp = await uaz._post("/send/menu", {
-        "number": phone,
-        "type": "button",
-        "text": texto,
-        "choices": choices,
-        "readchat": True,
-    })
+        botoes.append((SAIR_LABEL, SAIR_ID))
+    resp = await uaz.send_buttons(phone, texto, botoes)
     await save_message(db, phone, "assistant", texto)
     await db.commit()
     logger.bind(phone=phone).info(f"Campanha ({rodada}): convite com botão enviado")
